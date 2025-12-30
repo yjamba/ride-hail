@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+
 	"ride-hail/internal/ride/domain/models"
 	"ride-hail/internal/ride/handlers/dto"
 	"ride-hail/internal/ride/service"
@@ -39,11 +40,10 @@ func (h *RideHandler) CreateRide(w http.ResponseWriter, r *http.Request) {
 
 	cmd.Destination = models.Location{
 		Lat:     req.DestLat,
-		Lon:     req.DestLon
+		Lon:     req.DestLon,
 		Address: req.DestAddress,
 	}
 }
 
 func (h *RideHandler) CloseRide(w http.ResponseWriter, r *http.Request) {
-
 }

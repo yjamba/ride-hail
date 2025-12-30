@@ -3,15 +3,17 @@ package repository
 import (
 	"context"
 	"database/sql"
+
 	"ride-hail/internal/auth/domain/models"
 	"ride-hail/internal/auth/domain/ports"
+	"ride-hail/internal/shared/postgres"
 )
 
 type UserRepository struct {
-	db *DB
+	db *postgres.Database
 }
 
-func NewUserRepository(db *DB) ports.UserRepository {
+func NewUserRepository(db *postgres.Database) ports.UserRepository {
 	return &UserRepository{
 		db: db,
 	}
@@ -19,22 +21,22 @@ func NewUserRepository(db *DB) ports.UserRepository {
 
 // Save implements ports.UserRepository.
 func (u *UserRepository) Save(ctx context.Context, user *models.User) (string, error) {
-	tx, err := u.db.db.BeginTx(ctx, nil)
+	tx, err := u.db.BeginTx(ctx)
 	if err != nil {
 		return "", err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 
 	query := "INSERT INTO users (email, role, password_hash) VALUES ($1, $2, $3) RETURNING id"
 
 	var id string
 
-	err = tx.QueryRowContext(ctx, query, user.Email, user.Password, user.Role).Scan(&id)
+	err = tx.QueryRow(ctx, query, user.Email, user.Password, user.Role).Scan(&id)
 	if err != nil {
 		return "", err
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return "", err
 	}
 

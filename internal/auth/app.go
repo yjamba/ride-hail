@@ -2,19 +2,21 @@ package auth
 
 import (
 	"context"
+
 	"ride-hail/internal/auth/handlers"
 	"ride-hail/internal/auth/repository"
 	"ride-hail/internal/auth/service"
+	"ride-hail/internal/shared/postgres"
 )
 
 type App struct {
 	config *handlers.ServerConfig
-	db     *repository.DB
+	db     *postgres.Database
 
 	server *handlers.Server
 }
 
-func NewApp(config *handlers.ServerConfig, db *repository.DB) *App {
+func NewApp(config *handlers.ServerConfig, db *postgres.Database) *App {
 	return &App{
 		config: config,
 		db:     db,

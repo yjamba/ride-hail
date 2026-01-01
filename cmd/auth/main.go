@@ -19,18 +19,45 @@ func main() {
 	logger.InitLogger("debug")
 
 	config := &handlers.ServerConfig{
-		Addr: "localhost",
+		Addr: "0.0.0.0",
 		Port: 3001,
 	}
 
-	dbConfig := postgres.NewDBConfig("localhost", "5432", "postgres", "postgres", "ride-hail", "disabled")
-	db := postgres.NewDB(dbConfig)
+	// Read DB config from environment (with sensible defaults matching docker-compose)
+	getEnv := func(key, def string) string {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
+		return def
+	}
 
-	app := auth.NewApp(config, db)
+	dbHost := getEnv("POSTGRES_HOST", "postgres")
+	dbPort := getEnv("POSTGRES_PORT", "5432")
+	dbUser := getEnv("POSTGRES_USER", "postgres")
+	dbPassword := getEnv("POSTGRES_PASSWORD", "password")
+	dbName := getEnv("POSTGRES_DB", "ride_hail")
+	dbSSL := getEnv("POSTGRES_SSLMODE", "disable")
+
+	dbConfig := postgres.NewDBConfig(dbHost, dbPort, dbUser, dbPassword, dbName, dbSSL)
+	slog.Info("connecting to database",
+		"host", dbHost,
+		"port", dbPort,
+		"user", dbUser,
+		"db", dbName,
+		"sslmode", dbSSL,
+	)
+	db := postgres.NewDB(dbConfig)
+	if err := db.Connect(context.Background()); err != nil {
+		slog.Error("failed to connect to the database", "error", err.Error())
+		os.Exit(1)
+	}
+
+	app := auth.NewApp([]byte("supersecretkey"), config, db)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
+	slog.Info("starting auth service...")
 	go func() {
 		defer wg.Done()
 		if err := app.Start(context.Background()); err != nil {

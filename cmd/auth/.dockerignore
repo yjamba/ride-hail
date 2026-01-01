@@ -1,0 +1,11 @@
+**/.git
+**/.gitignore
+**/.DS_Store
+**/node_modules
+**/vendor
+**/bin
+**/pkg
+*.log
+.env
+docker-compose.yml
+migrations

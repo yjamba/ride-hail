@@ -18,27 +18,32 @@ func NewDriverRepository(db *postgres.Database) ports.DriverRepository {
 }
 
 func (d *DriverRepository) Save(ctx context.Context, driver *models.Driver) (string, error) {
-	tx, err := d.db.BeginTx(ctx)
-	if err != nil {
-		return "", err
+	tx := postgres.GetTxFromContext(ctx)
+	if tx != nil {
+		// Используем существующую транзакцию
+		return d.saveWithTx(ctx, tx, driver)
 	}
-	defer tx.Rollback(ctx)
-
-	query := "INSERT INTO drivers (user_id, license_number, vehicle_info) VALUES ($1, $2, $3) RETURNING id"
 
 	var id string
+	err := d.db.TxManager.WithTx(ctx, func(txCtx context.Context) error {
+		var err error
+		id, err = d.saveWithTx(txCtx, postgres.GetTxFromContext(txCtx), driver)
+		return err
+	})
+	return id, err
+}
 
-	vechicleInfo, err := json.Marshal(driver.VehicleAttrs)
+func (d *DriverRepository) saveWithTx(ctx context.Context, tx *postgres.Tx, driver *models.Driver) (string, error) {
+	query := "INSERT INTO drivers (user_id, license_number, vehicle_attrs) VALUES ($1, $2, $3) RETURNING id"
+	var id string
+
+	vehicleInfo, err := json.Marshal(driver.VehicleAttrs)
 	if err != nil {
 		return "", err
 	}
 
-	err = tx.QueryRow(ctx, query, driver.UserID, driver.LicenseNumber, vechicleInfo).Scan(&id)
+	err = tx.QueryRow(ctx, query, driver.UserID, driver.LicenseNumber, vehicleInfo).Scan(&id)
 	if err != nil {
-		return "", err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
 		return "", err
 	}
 

@@ -10,24 +10,29 @@ import (
 )
 
 type App struct {
+	secretKey []byte
+
 	config *handlers.ServerConfig
 	db     *postgres.Database
 
 	server *handlers.Server
 }
 
-func NewApp(config *handlers.ServerConfig, db *postgres.Database) *App {
+func NewApp(secretKey []byte, config *handlers.ServerConfig, db *postgres.Database) *App {
 	return &App{
-		config: config,
-		db:     db,
+		secretKey: secretKey,
+		config:    config,
+		db:        db,
 	}
 }
 
 func (a *App) Start(ctx context.Context) error {
 	userRepository := repository.NewUserRepository(a.db)
 	driverRepository := repository.NewDriverRepository(a.db)
+	txManager := postgres.NewTxManager(a.db)
 
-	authService := service.NewAuthService(userRepository, driverRepository, []byte("supersecretkey"))
+	tokenService := service.NewTokenService(a.secretKey)
+	authService := service.NewAuthService(tokenService, userRepository, driverRepository, txManager)
 	authHandler := handlers.NewAuthHandler(authService)
 
 	a.server = handlers.NewServer(authHandler, a.config)

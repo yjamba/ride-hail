@@ -12,9 +12,10 @@ import (
 )
 
 type Database struct {
-	config *DBConfig
-	pool   *pgxpool.Pool
-	mu     sync.RWMutex
+	config    *DBConfig
+	pool      *pgxpool.Pool
+	mu        sync.RWMutex
+	TxManager *TxManager
 }
 type Querier interface {
 	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
@@ -35,9 +36,11 @@ func (fr *failedRow) Scan(dest ...interface{}) error {
 }
 
 func NewDB(config *DBConfig) *Database {
-	return &Database{
+	db := &Database{
 		config: config,
 	}
+	db.TxManager = NewTxManager(db)
+	return db
 }
 
 func (db *Database) Connect(ctx context.Context) error {
@@ -57,11 +60,11 @@ func (db *Database) Connect(ctx context.Context) error {
 	}
 
 	// Конфигурация пула соединений для надёжности
-	poolConfig.MaxConns = 25                          // Максимум соединений
-	poolConfig.MinConns = 5                           // Минимум соединений
-	poolConfig.MaxConnLifetime = 15 * time.Minute     // Время жизни соединения
-	poolConfig.MaxConnIdleTime = 5 * time.Minute      // Время простоя перед закрытием
-	poolConfig.HealthCheckPeriod = 1 * time.Minute    // Период проверки здоровья
+	poolConfig.MaxConns = 25                       // Максимум соединений
+	poolConfig.MinConns = 5                        // Минимум соединений
+	poolConfig.MaxConnLifetime = 15 * time.Minute  // Время жизни соединения
+	poolConfig.MaxConnIdleTime = 5 * time.Minute   // Время простоя перед закрытием
+	poolConfig.HealthCheckPeriod = 1 * time.Minute // Период проверки здоровья
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {

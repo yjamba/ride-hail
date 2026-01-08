@@ -16,34 +16,62 @@ func NewRideHandler(service service.RideService) *RideHandler {
 	return &RideHandler{service: service}
 }
 
-func (h *RideHandler) CreateRide(w http.ResponseWriter, r *http.Request) {
-	var req dto.CreateRideRequest
+type ctxKey string
 
+const PassengerIDKey ctxKey = "passenger_id"
+
+func (h *RideHandler) CreateRide(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	var req dto.CreateRideRequest
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(req); err != nil {
-		http.Error(w, "", http.StatusBadRequest)
+
+	if err := decoder.Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	passengerID := r.Context().Value("passenger_id").(string)
+
+	passengerID, ok := r.Context().Value(PassengerIDKey).(string)
+	if !ok || passengerID == "" {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	vehicleType := models.VehicleType(req.RideType)
+	if !vehicleType.IsValid() {
+		http.Error(w, "invalid vehicle type", http.StatusBadRequest)
+		return
+	}
+
 	cmd := models.CreateRideCommand{
 		PassengerID: passengerID,
-		RideType:    req.RideType,
+		VehicleType: vehicleType,
+		Pickup: models.Location{
+			Latitude:  req.PickupLat,
+			Longitude: req.PickupLon,
+			Address:   req.PickupAddress,
+		},
+		Destination: models.Location{
+			Latitude:  req.DestLat,
+			Longitude: req.DestLon,
+			Address:   req.DestAddress,
+		},
 	}
 
-	cmd.Pickup = models.Location{
-		Lat:     req.PickupLat,
-		Lon:     req.PickupLon,
-		Address: req.PickupAddress,
+	ride, err := h.service.CreateRide(r.Context(), cmd)
+	if err != nil {
+		// минимальный маппинг
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
-	cmd.Destination = models.Location{
-		Lat:     req.DestLat,
-		Lon:     req.DestLon
-		Address: req.DestAddress,
-	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{
+		"ride_id": ride.ID,
+	})
 }
 
 func (h *RideHandler) CloseRide(w http.ResponseWriter, r *http.Request) {
-
 }

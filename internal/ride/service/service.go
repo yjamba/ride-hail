@@ -18,20 +18,22 @@ func NewRideService(repo repository.RideRepo) *RideService {
 	return &RideService{repo: repo}
 }
 
-func (s *RideService) CreateRide(ctx context.Context, cmd models.CreateRideCommand) (*models.RideDB, error) {
-	// if err := validateLanLon(message.PickupLat, message.PickupLon); err != nil { // проверка начальной точки
-	// 	return nil, err
-	// }
-	// if err := validateLanLon(message.DestLat, message.DestLon); err != nil { // проверка конечной точки
-	// 	return nil, err
-	// }
 
-	ride := &models.RideDB{
-		PassengerID:           cmd.PassengerID,
-		Status:                "REQUESTED",
-		PickupCoordinate:      cmd.CordinatePickup,
-		DestinationCoordinate: cmd.CordinateDest,
-		RequestedAt: time.Now(),
+func (s *RideService) CreateRide(ctx context.Context, cmd models.CreateRideCommand) (*models.Ride, error) {
+	if err := validateLanLon(cmd.Pickup.Latitude, cmd.Pickup.Longitude); err != nil { // проверка начальной точки
+		return nil, err
+	}
+	if err := validateLanLon(cmd.Destination.Latitude, cmd.Destination.Longitude); err != nil { // проверка конечной точки
+		return nil, err
+	}
+
+	ride := &models.Ride{
+		PassengerID:         cmd.PassengerID,
+		Status:              models.RideStatusRequested,
+		PickupLocation:      cmd.Pickup,
+		DestinationLocation: cmd.Destination,
+		RequestedAt:         time.Now(),
+		CreatedAt:           time.Now(),
 	}
 	if err := s.repo.CreateRide(ctx, ride); err != nil {
 		return nil, err
@@ -54,7 +56,7 @@ func (s *RideService) UpdateRideStatus(ctx context.Context, ride *models.CreateR
 
 func (s *RideService) CloseRide(ctx context.Context, id string) error {
 	return nil
-	//удалять нельзя просто закрыть поездку
+	// удалять нельзя просто закрыть поездку
 }
 
 func validateLanLon(lat, lon float64) error {

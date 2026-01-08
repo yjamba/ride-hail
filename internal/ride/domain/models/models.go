@@ -2,6 +2,9 @@ package models
 
 import "time"
 
+// PickupCoordinateID, DestinationCoordinateID — это инфраструктура
+// EstimatedFare — бизнес
+// timestamps — бизнес
 type Ride struct {
 	ID          string      `json:"id"`
 	RideNumber  string      `json:"ride_number"`
@@ -90,4 +93,22 @@ var PricingTable = map[VehicleType]PricingInfo{
 	VehicleTypeEconomy: {BaseFare: 500, RatePerKm: 100, RatePerMin: 50},
 	VehicleTypePremium: {BaseFare: 800, RatePerKm: 120, RatePerMin: 60},
 	VehicleTypeXL:      {BaseFare: 1000, RatePerKm: 150, RatePerMin: 75},
+}
+
+type CreateRideCommand struct {
+	PassengerID string
+	VehicleType VehicleType
+	Pickup      Location
+	Destination Location
+}
+
+func (v VehicleType) IsValid() bool {
+	switch v {
+	case VehicleTypeEconomy,
+		VehicleTypePremium,
+		VehicleTypeXL:
+		return true
+	default:
+		return false
+	}
 }

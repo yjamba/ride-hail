@@ -23,6 +23,28 @@ services:
     networks:
       - ride-hail-network
 
+  driver-service:
+    build:
+      context: .
+      dockerfile: ./cmd/driver/Dockerfile
+      args:
+        BUILD_TARGET: ./cmd/driver
+    ports:
+      - "3002:3002"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=${POSTGRES_DB:-ride_hail}
+      - PORT=3002
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - ride-hail-network
+
   postgres:
     image: postgres:15-alpine
     container_name: ride-hail-db

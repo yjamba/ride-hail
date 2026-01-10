@@ -8,16 +8,18 @@ import (
 )
 
 type Server struct {
-	server *http.Server
-	config ServerConfig
+	server  *http.Server
+	config  *ServerConfig
+	handler *DriverHandler
 
 	ctx    context.Context
 	cancel context.CancelFunc
 }
 
-func NewServer(config ServerConfig) *Server {
+func NewServer(handler *DriverHandler, config *ServerConfig) *Server {
 	return &Server{
-		config: config,
+		handler: handler,
+		config:  config,
 	}
 }
 
@@ -25,7 +27,7 @@ func (s *Server) Start(ctx context.Context) error {
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.server = &http.Server{
 		Addr:    s.config.GetAddr(),
-		Handler: nil,
+		Handler: RegisterRoutes(s.handler),
 		BaseContext: func(l net.Listener) context.Context {
 			return s.ctx
 		},

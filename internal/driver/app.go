@@ -1,6 +1,10 @@
 package driver
 
-import "context"
+import (
+	"context"
+
+	"ride-hail/internal/driver/handlers"
+)
 
 type App struct{}
 
@@ -9,6 +13,14 @@ func NewApp() *App {
 }
 
 func (a *App) Start(ctx context.Context) error {
+	config := handlers.NewServerConfig("localhost", 3002)
+	handler := handlers.NewDriverHandler()
+	server := handlers.NewServer(handler, config)
+
+	if err := server.Start(ctx); err != nil {
+		return err
+	}
+
 	return nil
 }
 

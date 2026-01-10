@@ -1,7 +1,19 @@
 package main
 
-import "fmt"
+import (
+	"context"
+	"log/slog"
+
+	"ride-hail/internal/driver"
+	"ride-hail/internal/shared/logger"
+)
 
 func main() {
-	fmt.Println("Hello, World!")
+	logger.InitLogger("debug")
+
+	app := driver.NewApp()
+
+	if err := app.Start(context.Background()); err != nil {
+		slog.Error("Error")
+	}
 }

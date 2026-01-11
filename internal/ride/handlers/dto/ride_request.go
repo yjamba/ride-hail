@@ -11,3 +11,8 @@ type CreateRideRequest struct {
 	DestAddress   string             `json:"destination_address"`
 	RideType      models.VehicleType `json:"ride_type"`
 }
+
+type CancelRideRequest struct {
+	RideId string `json:"ride_id"`
+	Reason string `json:"reason"`
+}

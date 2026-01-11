@@ -6,6 +6,7 @@ import (
 	"ride-hail/internal/ride/domain/models"
 	"ride-hail/internal/ride/handlers/dto"
 	"ride-hail/internal/ride/service"
+	"strings"
 )
 
 type RideHandler struct {
@@ -74,4 +75,35 @@ func (h *RideHandler) CreateRide(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RideHandler) CloseRide(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 3 {
+		http.Error(w, "invalid URL", http.StatusBadRequest)
+		return
+	}
+	rideID := parts[2]
+	passengerID, ok := r.Context().Value(PassengerIDKey).(string)
+	if !ok || passengerID == "" {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	var ride dto.CancelRideRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&ride); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	rideObj, err := h.service.GetRideById(r.Context(), rideID, passengerID)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if err := h.service.CloseRide(r.Context(), rideObj.ID, ride.Reason); err != nil {
+		http.Error(w, "cannot cancel ride", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "ride cancelled",
+	})
 }

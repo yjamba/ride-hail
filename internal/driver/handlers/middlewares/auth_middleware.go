@@ -2,8 +2,10 @@ package middlewares
 
 import (
 	"fmt"
-	"log/slog"
 	"net/http"
+	"strings"
+
+	"ride-hail/internal/driver/handlers/utils"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -21,10 +23,21 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		tokenString := r.Header.Get("Authorization")
 		if tokenString == "" {
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte("Missing authorization header"))
+			utils.SendError(w, utils.ErrorMessage{
+				StatusCode: http.StatusUnauthorized,
+				Message:    "Authorization header is required",
+			})
 			return
 		}
+
+		if !strings.HasPrefix(tokenString, "Bearer ") {
+			utils.SendError(w, utils.ErrorMessage{
+				StatusCode: http.StatusBadRequest,
+				Message:    "Authorization header must be in the format 'Bearer <token>'",
+			})
+			return
+		}
+
 		tokenString = tokenString[len("Bearer "):]
 
 		claims := &UserClaims{}
@@ -36,21 +49,33 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return []byte(secretKey), nil
 		})
 		if err != nil {
-			slog.Error("Error 1", err.Error())
-
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(err.Error()))
+			if strings.Contains(err.Error(), "signature") {
+				utils.SendError(w, utils.ErrorMessage{
+					StatusCode: http.StatusUnauthorized,
+					Message:    "Invalid token signature",
+				})
+			} else {
+				utils.SendError(w, utils.ErrorMessage{
+					StatusCode: http.StatusBadRequest,
+					Message:    "Malformed token",
+				})
+			}
 			return
 		}
 
 		if !token.Valid {
-			slog.Error("Error 2", "Invalid token")
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte("Invalid toke"))
+			utils.SendError(w, utils.ErrorMessage{
+				StatusCode: http.StatusUnauthorized,
+				Message:    "Invalid or expired token",
+			})
+			return
 		}
 
-		if claims.Role != "driver" {
-			slog.Error("Invalid role")
+		if claims.Role != "DRIVER" {
+			utils.SendError(w, utils.ErrorMessage{
+				StatusCode: http.StatusForbidden,
+				Message:    "Access denied: driver role required",
+			})
 			return
 		}
 

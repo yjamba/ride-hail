@@ -2,22 +2,26 @@ package driver
 
 import (
 	"context"
+	"log/slog"
 
 	"ride-hail/internal/driver/handlers"
 )
 
-type App struct{}
+type App struct {
+	server *handlers.Server
+}
 
 func NewApp() *App {
 	return &App{}
 }
 
 func (a *App) Start(ctx context.Context) error {
-	config := handlers.NewServerConfig("localhost", 3002)
+	config := handlers.NewServerConfig("0.0.0.0", 3002)
 	handler := handlers.NewDriverHandler()
-	server := handlers.NewServer(handler, config)
+	a.server = handlers.NewServer(handler, config)
 
-	if err := server.Start(ctx); err != nil {
+	if err := a.server.Start(ctx); err != nil {
+		slog.Error(err.Error())
 		return err
 	}
 
@@ -25,5 +29,11 @@ func (a *App) Start(ctx context.Context) error {
 }
 
 func (a *App) Stop(ctx context.Context) error {
+	slog.Info("Stopping driver service")
+
+	if a.server != nil {
+		return a.server.Stop(ctx)
+	}
+
 	return nil
 }

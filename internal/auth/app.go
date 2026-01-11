@@ -49,5 +49,9 @@ func (a *App) Stop(ctx context.Context) error {
 		return a.server.Stop(ctx)
 	}
 
+	if a.db != nil {
+		return a.db.Close()
+	}
+
 	return nil
 }

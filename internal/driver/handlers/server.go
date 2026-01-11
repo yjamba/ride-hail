@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 )
@@ -33,6 +34,8 @@ func (s *Server) Start(ctx context.Context) error {
 		},
 	}
 
+	slog.Info("starting driver server", "addr", s.config.GetAddr())
+
 	if err := s.server.ListenAndServe(); err != http.ErrServerClosed {
 		return err
 	}
@@ -49,6 +52,8 @@ func (s *Server) Stop(ctx context.Context) error {
 		if err := s.server.Shutdown(ctx); err != nil {
 			return err
 		}
+
+		return nil
 	}
 
 	return errors.New("Server is nil")

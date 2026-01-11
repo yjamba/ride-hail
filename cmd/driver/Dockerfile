@@ -23,7 +23,7 @@ RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=builder /app/main /app/main
 
-EXPOSE 3001
-ENV PORT=3001
+EXPOSE 3002
+ENV PORT=3002
 
 CMD ["/app/main"]

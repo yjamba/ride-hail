@@ -10,11 +10,37 @@ import (
 	"time"
 
 	"ride-hail/internal/driver"
+	"ride-hail/internal/shared/broker"
+	"ride-hail/internal/shared/broker/rabbitmq"
 	"ride-hail/internal/shared/logger"
+	"ride-hail/internal/shared/postgres"
 )
 
 func main() {
 	logger.InitLogger("debug")
+
+	getEnv := func(key, def string) string {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
+		return def
+	}
+
+	dbHost := getEnv("POSTGRES_HOST", "localhost")
+	dbPort := getEnv("POSTGRES_PORT", "5432")
+	dbUser := getEnv("POSTGRES_USER", "ride-hail")
+	dbPassword := getEnv("POSTGRES_PASSWORD", "ride-hail")
+	dbName := getEnv("POSTGRES_DB", "ride-hail-db")
+	dbSSL := getEnv("POSTGRES_SSLMODE", "disable")
+
+	dbConfig := postgres.NewDBConfig(dbHost, dbPort, dbUser, dbPassword, dbName, dbSSL)
+	rabbitHost := getEnv("RABBITMQ_HOST", "rabbitmq") // "rabbitmq" вместо "localhost"
+	rabbitPort := getEnv("RABBITMQ_PORT", "5672")
+	rabbitUser := getEnv("RABBITMQ_USER", "guest")
+	rabbitPassword := getEnv("RABBITMQ_PASSWORD", "guest_password") // "guest" вместо "guest_password"
+	rabbitVHost := getEnv("RABBITMQ_VHOST", "/")
+
+	brokerConfig := broker.NewBrokerConfig(rabbitHost, rabbitPort, rabbitUser, rabbitPassword, rabbitVHost)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -22,11 +48,28 @@ func main() {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
+	db := postgres.NewDB(dbConfig)
+
+	if err := db.Connect(ctx); err != nil {
+		slog.Error("failed to connect to db", "err", err.Error())
+		os.Exit(1)
+	}
+
+	slog.Info("connected to the database successfully")
+
+	rabbit := rabbitmq.NewRMQ(brokerConfig)
+	if err := rabbit.Connect(ctx); err != nil {
+		slog.Error("failed to connect to message broker", "err", err.Error())
+		os.Exit(1)
+	}
+
+	slog.Info("connected to the message broker successfully")
+
 	app := driver.NewApp()
 	go func() {
 		defer wg.Done()
 		if err := app.Start(ctx); err != nil {
-			slog.Error("Failed to start server", "err", err.Error())
+			slog.Error("failed to start server", "err", err.Error())
 		}
 	}()
 
@@ -39,7 +82,24 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
-				slog.Info("Reconnecting to db")
+				if !db.IsHealthy(ctx) {
+					slog.Error("database connection is not healthy")
+					if err := db.Reconnect(ctx); err != nil {
+						slog.Error("failed to reconnect to the database", "error", err.Error())
+					} else {
+						slog.Info("successfully reconnected to the database")
+					}
+				}
+
+				if !rabbit.IsHealthy(ctx) {
+					slog.Error("message broker connection is not healthy")
+					if err := rabbit.Reconnect(ctx); err != nil {
+						slog.Error("failed to reconnect to the message broker", "error", err.Error())
+					} else {
+						slog.Info("successfully reconnected to the message broker")
+					}
+				}
+
 			case <-ctx.Done():
 				return
 			}
@@ -54,7 +114,7 @@ func main() {
 	cancel()
 
 	if err := app.Stop(ctx); err != nil {
-		slog.Error("Failed to stop application", "err", err.Error())
+		slog.Error("failed to stop application", "err", err.Error())
 		return
 	}
 

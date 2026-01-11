@@ -85,6 +85,7 @@ func (r *RMQ) Connect(ctx context.Context) error {
 
 		r.Conn = conn
 		r.Ch = ch
+
 		done <- nil
 	}()
 
@@ -125,6 +126,14 @@ func (r *RMQ) Close(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func (r *RMQ) IsHealthy(ctx context.Context) bool {
+	if r.Conn == nil || r.Ch == nil {
+		return false
+	}
+
+	return !r.Conn.IsClosed()
 }
 
 func (r *RMQ) Reconnect(ctx context.Context) error {

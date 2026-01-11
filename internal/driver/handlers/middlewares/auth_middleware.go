@@ -79,6 +79,16 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		id := r.PathValue("driver_id")
+
+		if id != claims.UserId {
+			utils.SendError(w, utils.ErrorMessage{
+				StatusCode: http.StatusForbidden,
+				Message:    "Access denied: you can only access your own driver profile",
+			})
+			return
+		}
+
 		next.ServeHTTP(w, r)
 	}
 }

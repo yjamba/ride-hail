@@ -38,8 +38,21 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
       - POSTGRES_DB=${POSTGRES_DB:-ride_hail}
       - PORT=3002
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=${POSTGRES_DB:-ride_hail}
+      - PORT=3002
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=${RABBIT_USER:-guest}
+      - RABBITMQ_PASSWORD=${RABBIT_PASSWORD:-guest}
+      - RABBITMQ_VHOST=${RABBIT_VHOST:-/}
     depends_on:
       postgres:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     restart: unless-stopped
     networks:
@@ -64,6 +77,27 @@ services:
     networks:
       - ride-hail-network
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: ride-hail-rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBIT_USER:-guest}
+      - RABBITMQ_DEFAULT_PASS=${RABBIT_PASSWORD:-guest}
+    ports:
+      - 5672:5672
+      - 15672:15672
+    volumes:
+      - rabbitmq-lib:/var/lib/rabbitmq/
+      - rabbitmq-log:/var/log/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - ride-hail-network
+
   migrate:
     image: migrate/migrate
     depends_on:
@@ -78,6 +112,10 @@ services:
 
 volumes:
   postgres_data:
+  rabbitmq-lib:
+    driver: local
+  rabbitmq-log:
+    driver: local
 
 networks:
   ride-hail-network:

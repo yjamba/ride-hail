@@ -17,41 +17,24 @@ func NewRideHandler(service service.RideService) *RideHandler {
 	return &RideHandler{service: service}
 }
 
-type ctxKey string
-
-const PassengerIDKey ctxKey = "passenger_id"
-
+// CreateRide handles the creation of a new ride
 func (h *RideHandler) CreateRide(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
-
 	var req dto.CreateRideRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
 
-	if err := decoder.Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+	// Decode the JSON request body
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
 		return
 	}
 
-	passengerID, ok := r.Context().Value(PassengerIDKey).(string)
-	if !ok || passengerID == "" {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	vehicleType := models.VehicleType(req.RideType)
-	if !vehicleType.IsValid() {
-		http.Error(w, "invalid vehicle type", http.StatusBadRequest)
-		return
-	}
-
+	// Create the ride command
 	cmd := models.CreateRideCommand{
-		PassengerID: passengerID,
-		VehicleType: vehicleType,
+		PassengerID: req.PassengerID,
 		Pickup: models.Location{
 			Latitude:  req.PickupLat,
 			Longitude: req.PickupLon,
-			Address:   req.PickupAddress,
+			Address:   req.PickupAddr,
 		},
 		Destination: models.Location{
 			Latitude:  req.DestLat,
@@ -60,13 +43,14 @@ func (h *RideHandler) CreateRide(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
+	// Call the service to create the ride
 	ride, err := h.service.CreateRide(r.Context(), cmd)
 	if err != nil {
-		// минимальный маппинг
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	// Respond with the created ride ID
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{
@@ -74,36 +58,33 @@ func (h *RideHandler) CreateRide(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// CloseRide handles the cancellation of a ride
 func (h *RideHandler) CloseRide(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) < 3 {
 		http.Error(w, "invalid URL", http.StatusBadRequest)
 		return
 	}
-	rideID := parts[2]
-	passengerID, ok := r.Context().Value(PassengerIDKey).(string)
-	if !ok || passengerID == "" {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+	rideID := parts[len(parts)-1]
+
+	// Decode the JSON request body
+	var req dto.CancelRideRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
 		return
 	}
-	var ride dto.CancelRideRequest
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&ride); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+
+	// Call the service to close the ride
+	if err := h.service.CloseRide(r.Context(), rideID, req.Reason); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	rideObj, err := h.service.GetRideById(r.Context(), rideID, passengerID)
-	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
-		return
-	}
-	if err := h.service.CloseRide(r.Context(), rideObj.ID, ride.Reason); err != nil {
-		http.Error(w, "cannot cancel ride", http.StatusInternalServerError)
-		return
-	}
+
+	// Respond with success
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
-		"status": "ride cancelled",
+		"message": "Ride canceled successfully",
 	})
 }

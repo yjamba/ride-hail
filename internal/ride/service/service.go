@@ -6,7 +6,6 @@ import (
 	"log"
 	"ride-hail/internal/ride/domain/models"
 	"ride-hail/internal/ride/domain/ports"
-	"ride-hail/internal/ride/repository"
 )
 
 type RideService struct {
@@ -41,18 +40,14 @@ func (s *RideService) CreateRide(ctx context.Context, cmd models.CreateRideComma
 		return nil, err
 	}
 
-	return nil, nil
+	return ride, nil
 }
 
 func (s *RideService) GetRideById(ctx context.Context, rideID, passengerID string) (models.Ride, error) {
 	ride, err := s.repo.GetRide(ctx, rideID)
 	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			return models.Ride{}, err
-		}
 		return models.Ride{}, err
 	}
-
 	return ride, nil
 }
 

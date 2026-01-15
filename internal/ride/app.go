@@ -23,12 +23,12 @@ func NewApp(config *handlers.ServerConfig, db *repository.DB) *App {
 
 func (a *App) Start(ctx context.Context) error {
 	userRepository := repository.NewUserRepository(a.db)
-	driverRepository := repository.NewDriverRepository(a.db)
+	Repository := repository.NewDriverRepository(a.db)
 
-	authService := service.NewAuthService(userRepository, driverRepository, []byte("supersecretkey"))
-	authHandler := handlers.NewAuthHandler(authService)
+	Service := service.NewAuthService(userRepository, Repository, []byte("supersecretkey"))
+	Handler := handlers.NewAuthHandler(Service)
 
-	a.server = handlers.NewServer(authHandler, a.config)
+	a.server = handlers.NewServer(Handler, a.config)
 
 	if err := a.server.Start(ctx); err != nil {
 		return err

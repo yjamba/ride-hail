@@ -2,9 +2,9 @@ package ride
 
 import (
 	"context"
-	"ride-hail/internal/auth/handlers"
-	"ride-hail/internal/auth/repository"
-	"ride-hail/internal/auth/service"
+	"ride-hail/internal/ride/handlers"
+	"ride-hail/internal/ride/repository"
+	"ride-hail/internal/ride/service"
 )
 
 type App struct {
@@ -22,11 +22,10 @@ func NewApp(config *handlers.ServerConfig, db *repository.DB) *App {
 }
 
 func (a *App) Start(ctx context.Context) error {
-	userRepository := repository.NewUserRepository(a.db)
-	Repository := repository.NewDriverRepository(a.db)
+	Repository := repository.NewRideRepo(a.db)
 
-	Service := service.NewAuthService(userRepository, Repository, []byte("supersecretkey"))
-	Handler := handlers.NewAuthHandler(Service)
+	Service := service.NewRideService(Repository, []byte("supersecretkey"))
+	Handler := handlers.NewRideHandler(Service)
 
 	a.server = handlers.NewServer(Handler, a.config)
 

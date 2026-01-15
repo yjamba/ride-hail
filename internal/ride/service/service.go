@@ -5,17 +5,22 @@ import (
 	"errors"
 	"log"
 	"ride-hail/internal/ride/domain/models"
+	"ride-hail/internal/ride/domain/ports"
 	"ride-hail/internal/ride/repository"
 )
 
 type RideService struct {
-	repo repository.RideRepo
+	repo      ports.RideRepository
+	secretKey []byte
 	// publisher
 	// logger
 }
 
-func NewRideService(repo repository.RideRepo) *RideService {
-	return &RideService{repo: repo}
+func NewRideService(repo ports.RideRepository, secretKey []byte) *RideService {
+	return &RideService{
+		repo:      repo,
+		secretKey: secretKey,
+	}
 }
 
 func (s *RideService) CreateRide(ctx context.Context, cmd models.CreateRideCommand) (*models.Ride, error) {

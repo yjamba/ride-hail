@@ -35,3 +35,16 @@ type DriverSession struct {
 	TotalRides    int
 	TotalEarnings float64
 }
+
+type LocationHistory struct {
+	ID             string
+	CoordinateID   *string
+	DriverID       string
+	Latitude       float64
+	Longitude      float64
+	AccuracyMeters *float64
+	SpeedKmh       *float64
+	HeadingDegrees *float64
+	RecordedAt     time.Time
+	RideID         *string
+}

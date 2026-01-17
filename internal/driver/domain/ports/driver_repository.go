@@ -1,8 +1,13 @@
 package ports
 
-import "ride-hail/internal/driver/domain/models"
+import (
+	"context"
+
+	"ride-hail/internal/driver/domain/models"
+)
 
 type DriverRepository interface {
-	GetById(id string) (models.Driver, error)
-	Update(id string) error
+	GetById(ctx context.Context, id string) (models.Driver, error)
+	Update(ctx context.Context, id string) error
+	UpdateStatus(ctx context.Context, id string, status models.DriverStatus) error
 }

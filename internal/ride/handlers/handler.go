@@ -57,11 +57,6 @@ func (h *RideHandler) CreateRide(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"ride_id": ride.ID,
 	})
-	cmd.Destination = models.Location{
-		Lat:     req.DestLat,
-		Lon:     req.DestLon,
-		Address: req.DestAddress,
-	}
 }
 
 // CloseRide handles the cancellation of a ride

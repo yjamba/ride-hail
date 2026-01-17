@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -19,11 +20,22 @@ type UserClaims struct {
 	jwt.RegisteredClaims
 }
 
+type errorMessage struct {
+	StatusCode int    `json:"status_code"`
+	Message    string `json:"message"`
+}
+
+func sendError(w http.ResponseWriter, msg errorMessage) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(msg.StatusCode)
+	_ = json.NewEncoder(w).Encode(msg)
+}
+
 func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		tokenString := r.Header.Get("Authorization")
 		if tokenString == "" {
-			utils.SendError(w, utils.ErrorMessage{
+			sendError(w, errorMessage{
 				StatusCode: http.StatusUnauthorized,
 				Message:    "Authorization header is required",
 			})
@@ -31,7 +43,7 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if !strings.HasPrefix(tokenString, "Bearer ") {
-			utils.SendError(w, utils.ErrorMessage{
+			sendError(w, errorMessage{
 				StatusCode: http.StatusBadRequest,
 				Message:    "Authorization header must be in the format 'Bearer <token>'",
 			})
@@ -50,12 +62,12 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		})
 		if err != nil {
 			if strings.Contains(err.Error(), "signature") {
-				utils.SendError(w, utils.ErrorMessage{
+				sendError(w, errorMessage{
 					StatusCode: http.StatusUnauthorized,
 					Message:    "Invalid token signature",
 				})
 			} else {
-				utils.SendError(w, utils.ErrorMessage{
+				sendError(w, errorMessage{
 					StatusCode: http.StatusBadRequest,
 					Message:    "Malformed token",
 				})
@@ -64,7 +76,7 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if !token.Valid {
-			utils.SendError(w, utils.ErrorMessage{
+			sendError(w, errorMessage{
 				StatusCode: http.StatusUnauthorized,
 				Message:    "Invalid or expired token",
 			})
@@ -72,7 +84,7 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if claims.Role != "DRIVER" {
-			utils.SendError(w, utils.ErrorMessage{
+			sendError(w, errorMessage{
 				StatusCode: http.StatusForbidden,
 				Message:    "Access denied: driver role required",
 			})
@@ -82,7 +94,7 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		id := r.PathValue("driver_id")
 
 		if id != claims.UserId {
-			utils.SendError(w, utils.ErrorMessage{
+			sendError(w, errorMessage{
 				StatusCode: http.StatusForbidden,
 				Message:    "Access denied: you can only access your own driver profile",
 			})

@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+
 	"ride-hail/internal/ride/domain/models"
 	"ride-hail/internal/ride/handlers/dto"
 	"ride-hail/internal/ride/service"
@@ -56,6 +57,11 @@ func (h *RideHandler) CreateRide(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"ride_id": ride.ID,
 	})
+	cmd.Destination = models.Location{
+		Lat:     req.DestLat,
+		Lon:     req.DestLon,
+		Address: req.DestAddress,
+	}
 }
 
 // CloseRide handles the cancellation of a ride

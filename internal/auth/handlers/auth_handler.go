@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+
 	"ride-hail/internal/auth/domain/models"
 	"ride-hail/internal/auth/handlers/dto"
 	"ride-hail/internal/auth/service"

@@ -11,19 +11,16 @@ import (
 
 	"ride-hail/internal/auth"
 	"ride-hail/internal/auth/handlers"
+	"ride-hail/internal/shared/config"
 	"ride-hail/internal/shared/logger"
 	"ride-hail/internal/shared/postgres"
+	"strconv"
 )
 
 func main() {
 	logger.InitLogger("debug")
+	_ = config.LoadEnv()
 
-	config := &handlers.ServerConfig{
-		Addr: "0.0.0.0",
-		Port: 3001,
-	}
-
-	// Read DB config from environment (with sensible defaults matching docker-compose)
 	getEnv := func(key, def string) string {
 		if v := os.Getenv(key); v != "" {
 			return v
@@ -31,6 +28,16 @@ func main() {
 		return def
 	}
 
+	port := 3001
+	if p, err := strconv.Atoi(getEnv("PORT", "3001")); err == nil {
+		port = p
+	}
+	serverConfig := &handlers.ServerConfig{
+		Addr: "0.0.0.0",
+		Port: port,
+	}
+
+	// Read DB config from environment (with sensible defaults matching docker-compose)
 	dbHost := getEnv("POSTGRES_HOST", "postgres")
 	dbPort := getEnv("POSTGRES_PORT", "5432")
 	dbUser := getEnv("POSTGRES_USER", "postgres")
@@ -52,7 +59,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	app := auth.NewApp([]byte("supersecretkey"), config, db)
+	secret := getEnv("SECRET_KEY", getEnv("SECRET-KEY", "supersecretkey"))
+	app := auth.NewApp([]byte(secret), serverConfig, db)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)

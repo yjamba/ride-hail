@@ -11,7 +11,7 @@ func TestBrokerConfig_GetConnectionString(t *testing.T) {
 	}
 
 	got := cfg.GetConnectionString()
-	want := "amqp://guest:guest@localhost:5672/%2f"
+	want := "amqp://guest:guest@localhost:5672/%2F"
 	if got != want {
 		t.Fatalf("expected %q, got %q", want, got)
 	}

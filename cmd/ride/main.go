@@ -5,19 +5,23 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strconv"
+	"sync"
+	"syscall"
+
 	"ride-hail/internal/ride"
 	"ride-hail/internal/ride/handlers"
-	"ride-hail/internal/ride/repository"
 	"ride-hail/internal/shared/broker"
 	"ride-hail/internal/shared/broker/messages"
 	"ride-hail/internal/shared/broker/rabbitmq"
 	"ride-hail/internal/shared/config"
-	"strconv"
-	"sync"
-	"syscall"
+	"ride-hail/internal/shared/postgres"
 )
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	_ = config.LoadEnv()
 	getEnv := func(key, def string) string {
 		if v := os.Getenv(key); v != "" {
@@ -108,9 +112,22 @@ func main() {
 		slog.Error("failed to declare queues", "error", err.Error())
 		os.Exit(1)
 	}
-	db := &repository.DB{}
 
-	app := ride.NewApp(config, db)
+	dbHost := getEnv("POSTGRES_HOST", "postgres")
+	dbPort := getEnv("POSTGRES_PORT", "5432")
+	dbUser := getEnv("POSTGRES_USER", "postgres")
+	dbPassword := getEnv("POSTGRES_PASSWORD", "password")
+	dbName := getEnv("POSTGRES_DB", "ride_hail")
+	dbSSL := getEnv("POSTGRES_SSLMODE", "disable")
+
+	dbConfig := postgres.NewDBConfig(dbHost, dbPort, dbUser, dbPassword, dbName, dbSSL)
+	db := postgres.NewDB(dbConfig)
+	if err := db.Connect(ctx); err != nil {
+		slog.Error("failed to connect to postgres", "error", err.Error())
+		os.Exit(1)
+	}
+
+	app := ride.NewApp(config, db, rmq)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -121,12 +138,34 @@ func main() {
 		}
 	}()
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		if !db.IsHealthy(ctx) {
+			slog.Error("postgres is not healthy")
+			if err := db.Reconnect(ctx); err != nil {
+				slog.Error("failed to reconnect to postgres", "error", err.Error())
+			} else {
+				slog.Info("reconnected to postgres")
+			}
+		}
+
+		if !rmq.IsHealthy(ctx) {
+			slog.Error("rabbitmq is not healthy")
+			if err := rmq.Reconnect(ctx); err != nil {
+				slog.Error("failed to reconnect to rabbitmq", "error", err.Error())
+			} else {
+				slog.Info("reconnected to rabbitmq")
+			}
+		}
+	}()
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	<-sigChan
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+
 	if err := app.Stop(ctx); err != nil {
 		slog.Error("failed to stop ride service", "error", err.Error())
 	}

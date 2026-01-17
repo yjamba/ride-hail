@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"strings"
 
-	"ride-hail/internal/ride/handlers/utils"
-
 	"github.com/golang-jwt/jwt/v5"
 )
 

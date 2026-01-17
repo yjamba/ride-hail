@@ -2,19 +2,21 @@ package ride
 
 import (
 	"context"
+
 	"ride-hail/internal/ride/handlers"
 	"ride-hail/internal/ride/repository"
 	"ride-hail/internal/ride/service"
+	"ride-hail/internal/shared/postgres"
 )
 
 type App struct {
 	config *handlers.ServerConfig
-	db     *repository.DB
+	db     *postgres.Database
 
 	server *handlers.Server
 }
 
-func NewApp(config *handlers.ServerConfig, db *repository.DB) *App {
+func NewApp(config *handlers.ServerConfig, db *postgres.Database) *App {
 	return &App{
 		config: config,
 		db:     db,

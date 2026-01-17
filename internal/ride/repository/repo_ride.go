@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+
 	"ride-hail/internal/ride/domain/models"
 	"ride-hail/internal/ride/domain/ports"
+	"ride-hail/internal/shared/postgres"
 )
 
 var (
@@ -14,10 +16,10 @@ var (
 )
 
 type RideRepo struct {
-	db *DB
+	db *postgres.Database
 }
 
-func NewRideRepo(db *DB) ports.RideRepository {
+func NewRideRepo(db *postgres.Database) ports.RideRepository {
 	return &RideRepo{db: db}
 }
 
@@ -32,7 +34,7 @@ func (r *RideRepo) CreateRide(ctx context.Context, ride *models.Ride) error {
 	VALUES ($1, $2, $3, $4)
 	RETURNING id, requested_at, created_at, updated_at`
 
-	err := r.db.db.QueryRowContext(
+	err := r.db.QueryRow(
 		ctx,
 		query,
 		ride.PassengerID,
@@ -52,7 +54,7 @@ func (r *RideRepo) GetRide(ctx context.Context, id string) (models.Ride, error) 
 	FROM rides WHERE id = $1`
 
 	var ride models.Ride
-	err := r.db.db.QueryRowContext(ctx, query, id).Scan(
+	err := r.db.QueryRow(ctx, query, id).Scan(
 		&ride.ID,
 		&ride.PassengerID,
 		&ride.Status,
@@ -77,8 +79,8 @@ func (r *RideRepo) ListByPassenger(ctx context.Context, passengerID string) ([]m
 	query := `SELECT id, passenger_id, status, pickup_location, destination_location, requested_at, created_at, updated_at
     FROM rides WHERE passenger_id = $1`
 
-	rows, err := r.db.db.QueryContext(ctx, query, passengerID)
-	if (err != nil) {
+	rows, err := r.db.Query(ctx, query, passengerID)
+	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
@@ -114,7 +116,7 @@ func (r *RideRepo) ListByStatus(ctx context.Context, passengerID string, status 
 	query := `SELECT id, passenger_id, status, pickup_location, destination_location, requested_at, created_at, updated_at
     FROM rides WHERE passenger_id = $1 AND status = $2`
 
-	rows, err := r.db.db.QueryContext(ctx, query, passengerID, status)
+	rows, err := r.db.Query(ctx, query, passengerID, status)
 	if err != nil {
 		return nil, err
 	}
@@ -148,50 +150,44 @@ func (r *RideRepo) ListByStatus(ctx context.Context, passengerID string, status 
 
 // UpdateRide updates an existing ride in the database
 func (r *RideRepo) UpdateRide(ctx context.Context, ride models.Ride) error {
-    query := `UPDATE rides 
-    SET 
-        status = $1, 
-        pickup_location = $2, 
-        destination_location = $3, 
-        updated_at = NOW() 
-    WHERE id = $4`
+	query := `UPDATE rides 
+	SET 
+		status = $1, 
+		pickup_location = $2, 
+		destination_location = $3, 
+		updated_at = NOW() 
+	WHERE id = $4`
 
-    result, err := r.db.db.ExecContext(
-        ctx,
-        query,
-        ride.Status,
-        ride.PickupLocation,
-        ride.DestinationLocation,
-        ride.ID,
-    )
-    if err != nil {
-        return err
-    }
+	result, err := r.db.Exec(
+		ctx,
+		query,
+		ride.Status,
+		ride.PickupLocation,
+		ride.DestinationLocation,
+		ride.ID,
+	)
+	if err != nil {
+		return err
+	}
 
-    rowsAffected, err := result.RowsAffected()
-    if err != nil {
-        return err
-    }
-    if rowsAffected == 0 {
-        return ErrNotFound
-    }
+	rowsAffected := result.RowsAffected()
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
 
-    return nil
+	return nil
 }
 
 // CloseRide marks a ride as closed in the database (not implemented yet)
 func (r *RideRepo) CloseRide(ctx context.Context, id string, reason string) error {
 	query := `UPDATE rides SET status = 'CANCELLED', cancellation_reason = $1, cancelled_at = NOW(), updated_at = NOW() WHERE id = $2`
 
-	result, err := r.db.db.ExecContext(ctx, query, reason, id)
+	result, err := r.db.Exec(ctx, query, reason, id)
 	if err != nil {
 		return err
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
+	rowsAffected := result.RowsAffected()
 	if rowsAffected == 0 {
 		return ErrNotFound
 	}
@@ -202,15 +198,12 @@ func (r *RideRepo) CloseRide(ctx context.Context, id string, reason string) erro
 func (r *RideRepo) UpdateStatus(ctx context.Context, rideID string, status string) error {
 	query := `UPDATE rides SET status = $1, updated_at = NOW() WHERE id = $2`
 
-	result, err := r.db.db.ExecContext(ctx, query, status, rideID)
+	result, err := r.db.Exec(ctx, query, status, rideID)
 	if err != nil {
 		return err
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
+	rowsAffected := result.RowsAffected()
 	if rowsAffected == 0 {
 		return ErrNotFound
 	}

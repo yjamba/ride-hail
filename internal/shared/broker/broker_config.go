@@ -52,7 +52,7 @@ func NewBrokerConfigFromEnv() *BrokerConfig {
 		Host:     getEnv("RABBITMQ_HOST", "rabbitmq"),
 		Port:     getEnv("RABBITMQ_PORT", "5672"),
 		User:     getEnv("RABBITMQ_USER", "guest"),
-		Password: getEnv("RABBITMQ_PASSWORD", "guest_password"),
+		Password: getEnv("RABBITMQ_PASSWORD", "guest"), // Изменено с "guest_password" на "guest"
 		VHost:    getEnv("RABBITMQ_VHOST", "/"),
 	}
 }

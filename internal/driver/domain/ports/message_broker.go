@@ -5,5 +5,5 @@ type Consume interface {
 }
 
 type Publish interface {
-	Publish(queueName, queueKey string, body []byte) error
+	Publish(exchange, queueKey string, body []byte) error
 }

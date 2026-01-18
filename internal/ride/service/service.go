@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"time"
-
+	"fmt"
 	"ride-hail/internal/ride/domain/models"
 	"ride-hail/internal/ride/domain/ports"
 	"ride-hail/internal/shared/broker/messages"
 	"ride-hail/internal/shared/logger"
+	"time"
 )
 
 type RideService struct {
@@ -28,28 +28,20 @@ func NewRideService(repo ports.RideRepository, publisher ports.Publish, log *log
 	}
 }
 
-func (s *RideService) CreateRide(
-	ctx context.Context,
-	cmd models.CreateRideCommand,
-) (*models.Ride, error) {
-
+func (s *RideService) CreateRide(ctx context.Context, cmd models.CreateRideCommand) (*models.Ride, error) {
 	// 1. Валидация координат
 	if err := validateLanLon(cmd.Pickup.Latitude, cmd.Pickup.Longitude); err != nil {
 		s.logError(ctx, "validation_error", "invalid pickup coordinates", err)
 		return nil, err
 	}
-
 	if err := validateLanLon(cmd.Destination.Latitude, cmd.Destination.Longitude); err != nil {
 		s.logError(ctx, "validation_error", "invalid destination coordinates", err)
 		return nil, err
 	}
 
-	// 2. Расчёты (чистая бизнес-логика)
-	distanceKm := calculateDistance(
-		cmd.Pickup.Latitude, cmd.Pickup.Longitude,
-		cmd.Destination.Latitude, cmd.Destination.Longitude,
-	)
-
+	// 2. Расчёты
+	distanceKm := calculateDistance(cmd.Pickup.Latitude, cmd.Pickup.Longitude,
+		cmd.Destination.Latitude, cmd.Destination.Longitude)
 	durationMin := estimateDuration(distanceKm)
 
 	vehicleType := cmd.VehicleType
@@ -58,12 +50,9 @@ func (s *RideService) CreateRide(
 	}
 
 	pricing := models.PricingTable[vehicleType]
-	estimatedFare :=
-		pricing.BaseFare +
-			distanceKm*pricing.RatePerKm +
-			float64(durationMin)*pricing.RatePerMin
+	estimatedFare := pricing.BaseFare + distanceKm*pricing.RatePerKm + float64(durationMin)*pricing.RatePerMin
 
-	// 3. Формирование доменной сущности
+	// 3. Формируем Ride
 	ride := &models.Ride{
 		PassengerID:              cmd.PassengerID,
 		VehicleType:              vehicleType,
@@ -76,27 +65,27 @@ func (s *RideService) CreateRide(
 		EstimatedDurationMinutes: durationMin,
 	}
 
-	// 4. Сохранение (одна точка выхода в БД)
+	// 4. Генерация ride_number
+	ride.RideNumber = fmt.Sprintf("RIDE-%d", time.Now().UnixNano())
+
+	// 5. Сохраняем в репозитории (внутри транзакции repo создаст coordinates)
 	if err := s.repo.CreateRide(ctx, ride); err != nil {
 		s.logError(ctx, "db_error", "failed to create ride", err)
 		return nil, err
 	}
 
-	// 5. Логирование с ride_id
+	// 6. Логирование
 	ctx = logger.WithRideID(ctx, ride.ID)
-
 	s.logInfo(ctx, "ride_created", "ride successfully created", map[string]any{
-		"passenger_id": ride.PassengerID,
-		"vehicle_type": ride.VehicleType,
+		"passenger_id":   ride.PassengerID,
+		"ride_number":    ride.RideNumber,
+		"vehicle_type":   ride.VehicleType,
 		"estimated_fare": estimatedFare,
-		"distance_km": distanceKm,
-		"duration_min": durationMin,
 	})
 
-	// 6. Асинхронные побочные эффекты
+	// 7. Публикуем событие в брокер (если есть)
 	if err := s.publishRideMatchRequest(ctx, ride); err != nil {
 		s.logError(ctx, "publish_error", "failed to publish ride match request", err)
-		// ❗ ride НЕ откатываем
 	}
 
 	return ride, nil

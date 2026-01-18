@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log/slog"
 	"os"
 	"os/signal"
 	"ride-hail/internal/ride"
@@ -12,6 +11,7 @@ import (
 	"ride-hail/internal/shared/broker/messages"
 	"ride-hail/internal/shared/broker/rabbitmq"
 	"ride-hail/internal/shared/config"
+	"ride-hail/internal/shared/logger"
 	"strconv"
 	"sync"
 	"syscall"
@@ -26,6 +26,10 @@ func main() {
 		return def
 	}
 
+	// Initialize structured logger
+	log := logger.NewLogger("ride-service", getEnv("LOG_LEVEL", "info"))
+	ctx := context.Background()
+
 	port := 4001
 	if p, err := strconv.Atoi(getEnv("RIDE_SERVICE_PORT", "4001")); err == nil {
 		port = p
@@ -38,23 +42,25 @@ func main() {
 
 	brokerConfig := broker.NewBrokerConfigFromEnv()
 	rmq := rabbitmq.NewRMQ(brokerConfig)
-	if err := rmq.Connect(context.Background()); err != nil {
-		slog.Error("failed to connect to rabbitmq", "error", err.Error())
+	if err := rmq.Connect(ctx); err != nil {
+		log.Error(ctx, "rabbitmq_connect_error", "Failed to connect to RabbitMQ", err)
 		os.Exit(1)
 	}
+	log.Info(ctx, "rabbitmq_connected", "Successfully connected to RabbitMQ")
 
 	if err := rmq.DeclareExchanges(messages.ExchangeRideTopic, "topic", true, false, false, false, nil); err != nil {
-		slog.Error("failed to declare ride exchange", "error", err.Error())
+		log.Error(ctx, "exchange_declare_error", "Failed to declare ride exchange", err)
 		os.Exit(1)
 	}
 	if err := rmq.DeclareExchanges(messages.ExchangeDriverTopic, "topic", true, false, false, false, nil); err != nil {
-		slog.Error("failed to declare driver exchange", "error", err.Error())
+		log.Error(ctx, "exchange_declare_error", "Failed to declare driver exchange", err)
 		os.Exit(1)
 	}
 	if err := rmq.DeclareExchanges(messages.ExchangeLocationFanout, "fanout", true, false, false, false, nil); err != nil {
-		slog.Error("failed to declare location exchange", "error", err.Error())
+		log.Error(ctx, "exchange_declare_error", "Failed to declare location exchange", err)
 		os.Exit(1)
 	}
+	log.Info(ctx, "exchanges_declared", "All RabbitMQ exchanges declared successfully")
 
 	queues := []broker.QueueConfig{
 		{
@@ -105,19 +111,21 @@ func main() {
 	}
 
 	if err := rmq.DeclareQueues(queues); err != nil {
-		slog.Error("failed to declare queues", "error", err.Error())
+		log.Error(ctx, "queue_declare_error", "Failed to declare queues", err)
 		os.Exit(1)
 	}
+	log.Info(ctx, "queues_declared", "All RabbitMQ queues declared successfully")
+
 	db := &repository.DB{}
 
-	app := ride.NewApp(config, db)
+	app := ride.NewApp(config, db, rmq, log)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := app.Start(context.Background()); err != nil {
-			slog.Error("failed to start auth service", "error", err.Error())
+		if err := app.Start(ctx); err != nil {
+			log.Error(ctx, "server_error", "Failed to start ride service", err)
 		}
 	}()
 
@@ -125,13 +133,18 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	<-sigChan
-	ctx, cancel := context.WithCancel(context.Background())
+	log.Info(ctx, "shutdown_initiated", "Received shutdown signal, stopping service")
+
+	shutdownCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if err := app.Stop(ctx); err != nil {
-		slog.Error("failed to stop ride service", "error", err.Error())
+
+	if err := app.Stop(shutdownCtx); err != nil {
+		log.Error(ctx, "shutdown_error", "Failed to stop ride service", err)
 	}
-	if err := rmq.Close(ctx); err != nil {
-		slog.Error("failed to close rabbitmq", "error", err.Error())
+	if err := rmq.Close(shutdownCtx); err != nil {
+		log.Error(ctx, "rabbitmq_close_error", "Failed to close RabbitMQ connection", err)
 	}
+
+	log.Info(ctx, "shutdown_complete", "Ride service stopped successfully")
 	wg.Wait()
 }

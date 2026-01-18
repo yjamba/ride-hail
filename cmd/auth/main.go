@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -13,7 +14,6 @@ import (
 	"ride-hail/internal/shared/config"
 	"ride-hail/internal/shared/logger"
 	"ride-hail/internal/shared/postgres"
-	"strconv"
 )
 
 func main() {

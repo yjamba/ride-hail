@@ -73,11 +73,11 @@ func TestExchangeConstants(t *testing.T) {
 
 func TestQueueConstants(t *testing.T) {
 	queues := map[string]string{
-		"QueueRideRequests":       QueueRideRequests,
-		"QueueRideStatus":         QueueRideStatus,
-		"QueueDriverMatching":     QueueDriverMatching,
-		"QueueDriverResponses":    QueueDriverResponses,
-		"QueueDriverStatus":       QueueDriverStatus,
+		"QueueRideRequests":        QueueRideRequests,
+		"QueueRideStatus":          QueueRideStatus,
+		"QueueDriverMatching":      QueueDriverMatching,
+		"QueueDriverResponses":     QueueDriverResponses,
+		"QueueDriverStatus":        QueueDriverStatus,
 		"QueueLocationUpdatesRide": QueueLocationUpdatesRide,
 	}
 

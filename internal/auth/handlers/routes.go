@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+
 	"ride-hail/internal/auth/handlers/middlewares"
 )
 

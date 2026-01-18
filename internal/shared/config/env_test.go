@@ -27,7 +27,7 @@ EMPTY_LINE_ABOVE=yes
 NO_EQUALS_LINE
   SPACES_AROUND  =  trimmed  
 `
-	if err := os.WriteFile(envFile, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(envFile, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -73,7 +73,7 @@ func TestLoadEnvFile_NoOverwrite(t *testing.T) {
 	dir := t.TempDir()
 	envFile := filepath.Join(dir, ".env")
 	content := `EXISTING_KEY=new_value`
-	if err := os.WriteFile(envFile, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(envFile, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

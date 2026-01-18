@@ -2,11 +2,11 @@ package admin
 
 import (
 	"context"
-	"log/slog"
 
 	"ride-hail/internal/admin/handlers"
 	"ride-hail/internal/admin/repository"
 	"ride-hail/internal/admin/service"
+	"ride-hail/internal/shared/logger"
 	"ride-hail/internal/shared/postgres"
 )
 
@@ -16,13 +16,14 @@ type App struct {
 
 	db *postgres.Database
 
-	logger *slog.Logger
+	logger *logger.Logger
 }
 
-func NewApp(db *postgres.Database, serverConfig *handlers.ServerConfig, logger *slog.Logger) *App {
+func NewApp(db *postgres.Database, serverConfig *handlers.ServerConfig, log *logger.Logger) *App {
 	return &App{
-		db:     db,
-		logger: logger,
+		db:           db,
+		serverConfig: serverConfig,
+		logger:       log,
 	}
 }
 
@@ -30,11 +31,15 @@ func (a *App) Start(ctx context.Context) error {
 	metricsRepo := repository.NewMetricsRepository(a.db)
 	ridesRepo := repository.NewRidesRepository(a.db)
 
-	service := service.NewService(metricsRepo, ridesRepo, a.logger)
+	svc := service.NewService(metricsRepo, ridesRepo, a.logger)
 
-	handler := handlers.NewHandler(*service)
+	handler := handlers.NewHandler(*svc)
 
 	a.server = handlers.NewServer(handler, a.serverConfig)
+
+	if a.logger != nil {
+		a.logger.Info(ctx, "server_starting", "Admin service starting")
+	}
 
 	if err := a.server.Start(ctx); err != nil {
 		return err

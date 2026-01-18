@@ -5,89 +5,207 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
-	"log/slog"
 	"os"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
 )
+
+// Log levels
+const (
+	LevelDebug = "DEBUG"
+	LevelInfo  = "INFO"
+	LevelError = "ERROR"
+)
+
+// Context keys for request tracing
+type ctxKey string
 
 const (
-	red    = "\033[31m"
-	yellow = "\033[33m"
-	green  = "\033[32m"
-	blue   = "\033[36m"
-	reset  = "\033[0m"
+	CtxRequestID ctxKey = "request_id"
+	CtxRideID    ctxKey = "ride_id"
 )
 
-func InitLogger(level string) *slog.Logger {
-	levelSlog := slog.LevelDebug
-	switch level {
-	case "debug":
-		levelSlog = slog.LevelDebug
-	case "warn":
-		levelSlog = slog.LevelWarn
-	case "error":
-		levelSlog = slog.LevelError
-	case "info":
-		levelSlog = slog.LevelInfo
-	default:
-		fmt.Println("i don't know this log level, set to info")
-		levelSlog = slog.LevelInfo
-	}
-	opts := PrettyHandleOptions{
-		SlogOpt: slog.HandlerOptions{
-			Level: levelSlog,
-		},
-	}
-	var handler slog.Handler = NewPrettyHandler(os.Stdout, opts)
-	slog.SetDefault(slog.New(handler))
-
-	return slog.Default()
+// LogEntry represents a structured log entry
+type LogEntry struct {
+	Timestamp string      `json:"timestamp"`
+	Level     string      `json:"level"`
+	Service   string      `json:"service"`
+	Action    string      `json:"action"`
+	Message   string      `json:"message"`
+	Hostname  string      `json:"hostname"`
+	RequestID string      `json:"request_id,omitempty"`
+	RideID    string      `json:"ride_id,omitempty"`
+	Error     *ErrorInfo  `json:"error,omitempty"`
+	Extra     interface{} `json:"extra,omitempty"`
 }
 
-type PrettyHandleOptions struct {
-	SlogOpt slog.HandlerOptions
+// ErrorInfo contains error details for ERROR level logs
+type ErrorInfo struct {
+	Msg   string `json:"msg"`
+	Stack string `json:"stack,omitempty"`
 }
 
-type PrettyHandler struct {
-	slog.Handler
-	l *log.Logger
+// Logger is a structured JSON logger
+type Logger struct {
+	service  string
+	hostname string
+	output   io.Writer
+	level    string
+	mu       sync.Mutex
 }
 
-func (p *PrettyHandler) Handle(ctx context.Context, r slog.Record) error {
-	level := r.Level.String() + ":"
-	switch r.Level {
-	case slog.LevelDebug:
-		level = blue + level + reset
-	case slog.LevelInfo:
-		level = green + level + reset
-	case slog.LevelWarn:
-		level = yellow + level + reset
-	case slog.LevelError:
-		level = red + level + reset
+// NewLogger creates a new structured logger
+func NewLogger(service string, level string) *Logger {
+	hostname, _ := os.Hostname()
+	if hostname == "" {
+		hostname = "unknown"
 	}
-	fields := make(map[string]interface{}, r.NumAttrs())
-	r.Attrs(func(a slog.Attr) bool {
-		fields[a.Key] = fmt.Sprint(a.Value.Any())
-		return true
-	})
 
-	b, err := json.MarshalIndent(fields, " ", " ")
-	if err != nil {
-		return err
+	validLevel := LevelInfo
+	switch strings.ToUpper(level) {
+	case LevelDebug:
+		validLevel = LevelDebug
+	case LevelInfo:
+		validLevel = LevelInfo
+	case LevelError:
+		validLevel = LevelError
 	}
-	timeStr := r.Time.Format("[2006-01-02 15:04:05]")
 
-	if string(b) == "{}" {
-		p.l.Println(timeStr, level, r.Message)
-	} else {
-		p.l.Println(timeStr, level, r.Message, string(b))
+	return &Logger{
+		service:  service,
+		hostname: hostname,
+		output:   os.Stdout,
+		level:    validLevel,
 	}
-	return nil
 }
 
-func NewPrettyHandler(out io.Writer, opts PrettyHandleOptions) *PrettyHandler {
-	return &PrettyHandler{
-		Handler: slog.NewJSONHandler(out, &opts.SlogOpt),
-		l:       log.New(out, "", 0),
+// SetOutput sets the output writer for the logger
+func (l *Logger) SetOutput(w io.Writer) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.output = w
+}
+
+// shouldLog checks if the message should be logged based on level
+func (l *Logger) shouldLog(level string) bool {
+	levelOrder := map[string]int{
+		LevelDebug: 0,
+		LevelInfo:  1,
+		LevelError: 2,
 	}
+	return levelOrder[level] >= levelOrder[l.level]
+}
+
+// log writes a log entry
+func (l *Logger) log(ctx context.Context, level, action, message string, err error, extra interface{}) {
+	if !l.shouldLog(level) {
+		return
+	}
+
+	entry := LogEntry{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Level:     level,
+		Service:   l.service,
+		Action:    action,
+		Message:   message,
+		Hostname:  l.hostname,
+	}
+
+	// Extract request_id and ride_id from context
+	if ctx != nil {
+		if requestID, ok := ctx.Value(CtxRequestID).(string); ok {
+			entry.RequestID = requestID
+		}
+		if rideID, ok := ctx.Value(CtxRideID).(string); ok {
+			entry.RideID = rideID
+		}
+	}
+
+	// Add error info for ERROR level
+	if err != nil && level == LevelError {
+		entry.Error = &ErrorInfo{
+			Msg:   err.Error(),
+			Stack: getStackTrace(),
+		}
+	}
+
+	// Add extra fields if provided
+	if extra != nil {
+		entry.Extra = extra
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	data, jsonErr := json.Marshal(entry)
+	if jsonErr != nil {
+		fmt.Fprintf(l.output, `{"timestamp":"%s","level":"ERROR","service":"%s","action":"log_error","message":"failed to marshal log entry"}`+"\n",
+			time.Now().UTC().Format(time.RFC3339), l.service)
+		return
+	}
+
+	fmt.Fprintln(l.output, string(data))
+}
+
+// Debug logs a debug message
+func (l *Logger) Debug(ctx context.Context, action, message string) {
+	l.log(ctx, LevelDebug, action, message, nil, nil)
+}
+
+// DebugWithFields logs a debug message with extra fields
+func (l *Logger) DebugWithFields(ctx context.Context, action, message string, extra interface{}) {
+	l.log(ctx, LevelDebug, action, message, nil, extra)
+}
+
+// Info logs an info message
+func (l *Logger) Info(ctx context.Context, action, message string) {
+	l.log(ctx, LevelInfo, action, message, nil, nil)
+}
+
+// InfoWithFields logs an info message with extra fields
+func (l *Logger) InfoWithFields(ctx context.Context, action, message string, extra interface{}) {
+	l.log(ctx, LevelInfo, action, message, nil, extra)
+}
+
+// Error logs an error message
+func (l *Logger) Error(ctx context.Context, action, message string, err error) {
+	l.log(ctx, LevelError, action, message, err, nil)
+}
+
+// ErrorWithFields logs an error message with extra fields
+func (l *Logger) ErrorWithFields(ctx context.Context, action, message string, err error, extra interface{}) {
+	l.log(ctx, LevelError, action, message, err, extra)
+}
+
+// WithRequestID returns a new context with request_id
+func WithRequestID(ctx context.Context, requestID string) context.Context {
+	return context.WithValue(ctx, CtxRequestID, requestID)
+}
+
+// WithRideID returns a new context with ride_id
+func WithRideID(ctx context.Context, rideID string) context.Context {
+	return context.WithValue(ctx, CtxRideID, rideID)
+}
+
+// getStackTrace returns a simplified stack trace
+func getStackTrace() string {
+	const depth = 32
+	var pcs [depth]uintptr
+	n := runtime.Callers(4, pcs[:])
+	frames := runtime.CallersFrames(pcs[:n])
+
+	var builder strings.Builder
+	for {
+		frame, more := frames.Next()
+		// Skip runtime and standard library frames
+		if !strings.Contains(frame.File, "runtime/") {
+			fmt.Fprintf(&builder, "%s:%d %s\n", frame.File, frame.Line, frame.Function)
+		}
+		if !more {
+			break
+		}
+	}
+	return builder.String()
 }

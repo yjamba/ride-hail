@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+
 	"ride-hail/internal/auth/domain/models"
 )
 

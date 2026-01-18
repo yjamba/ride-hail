@@ -3,17 +3,18 @@ package service
 import (
 	"context"
 	"errors"
-	"ride-hail/internal/ride/domain/models"
 	"testing"
+
+	"ride-hail/internal/ride/domain/models"
 )
 
 // Mock repository for testing
 type mockRideRepo struct {
-	createRideFunc    func(ctx context.Context, ride *models.Ride) error
-	getRideFunc       func(ctx context.Context, id string) (models.Ride, error)
-	listByStatusFunc  func(ctx context.Context, passengerID, status string) ([]models.Ride, error)
-	updateStatusFunc  func(ctx context.Context, rideID, status string) error
-	closeRideFunc     func(ctx context.Context, id, reason string) error
+	createRideFunc   func(ctx context.Context, ride *models.Ride) error
+	getRideFunc      func(ctx context.Context, id string) (models.Ride, error)
+	listByStatusFunc func(ctx context.Context, passengerID, status string) ([]models.Ride, error)
+	updateStatusFunc func(ctx context.Context, rideID, status string) error
+	closeRideFunc    func(ctx context.Context, id, reason string) error
 }
 
 func (m *mockRideRepo) CreateRide(ctx context.Context, ride *models.Ride) error {
@@ -109,7 +110,7 @@ func TestNewRideService(t *testing.T) {
 	repo := &mockRideRepo{}
 	secret := []byte("test-secret")
 
-	svc := NewRideService(repo, secret)
+	svc := NewRideService(repo, nil, nil, secret)
 
 	if svc == nil {
 		t.Fatal("expected non-nil service")
@@ -121,7 +122,7 @@ func TestNewRideService(t *testing.T) {
 
 func TestCreateRide_Success(t *testing.T) {
 	repo := &mockRideRepo{}
-	svc := NewRideService(repo, []byte("secret"))
+	svc := NewRideService(repo, nil, nil, []byte("secret"))
 
 	cmd := models.CreateRideCommand{
 		PassengerID: "passenger-123",
@@ -143,7 +144,7 @@ func TestCreateRide_Success(t *testing.T) {
 
 func TestCreateRide_InvalidPickupCoords(t *testing.T) {
 	repo := &mockRideRepo{}
-	svc := NewRideService(repo, []byte("secret"))
+	svc := NewRideService(repo, nil, nil, []byte("secret"))
 
 	cmd := models.CreateRideCommand{
 		PassengerID: "passenger-123",
@@ -159,7 +160,7 @@ func TestCreateRide_InvalidPickupCoords(t *testing.T) {
 
 func TestCreateRide_InvalidDestCoords(t *testing.T) {
 	repo := &mockRideRepo{}
-	svc := NewRideService(repo, []byte("secret"))
+	svc := NewRideService(repo, nil, nil, []byte("secret"))
 
 	cmd := models.CreateRideCommand{
 		PassengerID: "passenger-123",
@@ -179,7 +180,7 @@ func TestCreateRide_RepoError(t *testing.T) {
 			return errors.New("db error")
 		},
 	}
-	svc := NewRideService(repo, []byte("secret"))
+	svc := NewRideService(repo, nil, nil, []byte("secret"))
 
 	cmd := models.CreateRideCommand{
 		PassengerID: "passenger-123",
@@ -199,7 +200,7 @@ func TestGetRideById_Success(t *testing.T) {
 			return models.Ride{ID: id, PassengerID: "passenger-123"}, nil
 		},
 	}
-	svc := NewRideService(repo, []byte("secret"))
+	svc := NewRideService(repo, nil, nil, []byte("secret"))
 
 	ride, err := svc.GetRideById(context.Background(), "ride-123", "passenger-123")
 	if err != nil {
@@ -216,7 +217,7 @@ func TestGetRideById_NotFound(t *testing.T) {
 			return models.Ride{}, errors.New("not found")
 		},
 	}
-	svc := NewRideService(repo, []byte("secret"))
+	svc := NewRideService(repo, nil, nil, []byte("secret"))
 
 	_, err := svc.GetRideById(context.Background(), "nonexistent", "passenger-123")
 	if err == nil {
@@ -230,7 +231,7 @@ func TestGetRideByStatus_Success(t *testing.T) {
 			return []models.Ride{{ID: "ride-1"}, {ID: "ride-2"}}, nil
 		},
 	}
-	svc := NewRideService(repo, []byte("secret"))
+	svc := NewRideService(repo, nil, nil, []byte("secret"))
 
 	rides, err := svc.GetRideByStatus(context.Background(), "passenger-123", "REQUESTED")
 	if err != nil {
@@ -243,7 +244,7 @@ func TestGetRideByStatus_Success(t *testing.T) {
 
 func TestUpdateRideStatus_ValidStatus(t *testing.T) {
 	repo := &mockRideRepo{}
-	svc := NewRideService(repo, []byte("secret"))
+	svc := NewRideService(repo, nil, nil, []byte("secret"))
 
 	validStatuses := []string{"REQUESTED", "IN_PROGRESS", "COMPLETED", "CANCELLED"}
 	for _, status := range validStatuses {
@@ -256,7 +257,7 @@ func TestUpdateRideStatus_ValidStatus(t *testing.T) {
 
 func TestUpdateRideStatus_InvalidStatus(t *testing.T) {
 	repo := &mockRideRepo{}
-	svc := NewRideService(repo, []byte("secret"))
+	svc := NewRideService(repo, nil, nil, []byte("secret"))
 
 	err := svc.UpdateRideStatus(context.Background(), "ride-123", "INVALID_STATUS")
 	if err == nil {
@@ -270,7 +271,7 @@ func TestUpdateRideStatus_RepoError(t *testing.T) {
 			return errors.New("db error")
 		},
 	}
-	svc := NewRideService(repo, []byte("secret"))
+	svc := NewRideService(repo, nil, nil, []byte("secret"))
 
 	err := svc.UpdateRideStatus(context.Background(), "ride-123", "COMPLETED")
 	if err == nil {
@@ -280,7 +281,7 @@ func TestUpdateRideStatus_RepoError(t *testing.T) {
 
 func TestCloseRide_Success(t *testing.T) {
 	repo := &mockRideRepo{}
-	svc := NewRideService(repo, []byte("secret"))
+	svc := NewRideService(repo, nil, nil, []byte("secret"))
 
 	err := svc.CloseRide(context.Background(), "ride-123", "changed my mind")
 	if err != nil {
@@ -294,7 +295,7 @@ func TestCloseRide_RepoError(t *testing.T) {
 			return errors.New("db error")
 		},
 	}
-	svc := NewRideService(repo, []byte("secret"))
+	svc := NewRideService(repo, nil, nil, []byte("secret"))
 
 	err := svc.CloseRide(context.Background(), "ride-123", "reason")
 	if err == nil {

@@ -11,13 +11,15 @@ import (
 
 	"ride-hail/internal/driver"
 	"ride-hail/internal/shared/broker"
+	"ride-hail/internal/shared/broker/messages"
 	"ride-hail/internal/shared/broker/rabbitmq"
+	"ride-hail/internal/shared/config"
 	"ride-hail/internal/shared/logger"
 	"ride-hail/internal/shared/postgres"
 )
 
 func main() {
-	logger.InitLogger("debug")
+	_ = config.LoadEnv()
 
 	getEnv := func(key, def string) string {
 		if v := os.Getenv(key); v != "" {
@@ -25,8 +27,9 @@ func main() {
 		}
 		return def
 	}
+	logger.NewLogger("driver-service", getEnv("LOG_LEVEL", "info"))
 
-	dbHost := getEnv("POSTGRES_HOST", "localhost")
+	dbHost := getEnv("POSTGRES_HOST", "postgres")
 	dbPort := getEnv("POSTGRES_PORT", "5432")
 	dbUser := getEnv("POSTGRES_USER", "ride-hail")
 	dbPassword := getEnv("POSTGRES_PASSWORD", "ride-hail")
@@ -34,13 +37,6 @@ func main() {
 	dbSSL := getEnv("POSTGRES_SSLMODE", "disable")
 
 	dbConfig := postgres.NewDBConfig(dbHost, dbPort, dbUser, dbPassword, dbName, dbSSL)
-	rabbitHost := getEnv("RABBITMQ_HOST", "rabbitmq") // "rabbitmq" вместо "localhost"
-	rabbitPort := getEnv("RABBITMQ_PORT", "5672")
-	rabbitUser := getEnv("RABBITMQ_USER", "guest")
-	rabbitPassword := getEnv("RABBITMQ_PASSWORD", "guest_password") // "guest" вместо "guest_password"
-	rabbitVHost := getEnv("RABBITMQ_VHOST", "/")
-
-	brokerConfig := broker.NewBrokerConfig(rabbitHost, rabbitPort, rabbitUser, rabbitPassword, rabbitVHost)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -49,23 +45,67 @@ func main() {
 	wg.Add(1)
 
 	db := postgres.NewDB(dbConfig)
-
 	if err := db.Connect(ctx); err != nil {
 		slog.Error("failed to connect to db", "err", err.Error())
 		os.Exit(1)
 	}
-
 	slog.Info("connected to the database successfully")
+
+	// RabbitMQ configuration - используем NewBrokerConfigFromEnv() как в ride service
+	brokerConfig := broker.NewBrokerConfigFromEnv()
+
+	slog.Info("connecting to RabbitMQ",
+		"host", brokerConfig.Host,
+		"port", brokerConfig.Port,
+		"vhost", brokerConfig.VHost)
 
 	rabbit := rabbitmq.NewRMQ(brokerConfig)
 	if err := rabbit.Connect(ctx); err != nil {
 		slog.Error("failed to connect to message broker", "err", err.Error())
 		os.Exit(1)
 	}
-
 	slog.Info("connected to the message broker successfully")
 
-	app := driver.NewApp()
+	// Declare exchanges (как в ride service)
+	if err := rabbit.DeclareExchanges(messages.ExchangeDriverTopic, "topic", true, false, false, false, nil); err != nil {
+		slog.Error("failed to declare driver exchange", "err", err.Error())
+		os.Exit(1)
+	}
+	if err := rabbit.DeclareExchanges(messages.ExchangeLocationFanout, "fanout", true, false, false, false, nil); err != nil {
+		slog.Error("failed to declare location exchange", "err", err.Error())
+		os.Exit(1)
+	}
+	slog.Info("exchanges declared successfully")
+
+	// Declare queues
+	queues := []broker.QueueConfig{
+		{
+			Name:       messages.QueueDriverMatching,
+			Durable:    true,
+			AutoDelete: false,
+			Exclusive:  false,
+			NoWait:     false,
+			Exchange:   messages.ExchangeDriverTopic,
+			RoutingKey: "driver.matching",
+		},
+		{
+			Name:       messages.QueueDriverResponses,
+			Durable:    true,
+			AutoDelete: false,
+			Exclusive:  false,
+			NoWait:     false,
+			Exchange:   messages.ExchangeDriverTopic,
+			RoutingKey: "driver.response.*",
+		},
+	}
+
+	if err := rabbit.DeclareQueues(queues); err != nil {
+		slog.Error("failed to declare queues", "err", err.Error())
+		os.Exit(1)
+	}
+	slog.Info("queues declared successfully")
+
+	app := driver.NewApp(db, rabbit)
 	go func() {
 		defer wg.Done()
 		if err := app.Start(ctx); err != nil {
@@ -110,13 +150,20 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	<-sigChan
+	slog.Info("received shutdown signal")
 
 	cancel()
 
 	if err := app.Stop(ctx); err != nil {
 		slog.Error("failed to stop application", "err", err.Error())
-		return
+	}
+	if err := rabbit.Close(ctx); err != nil {
+		slog.Error("failed to close RabbitMQ connection", "err", err.Error())
+	}
+	if err := db.Close(); err != nil {
+		slog.Error("failed to close database connection", "err", err.Error())
 	}
 
+	slog.Info("driver service stopped successfully")
 	wg.Wait()
 }

@@ -128,7 +128,7 @@ func TestAuthMiddleware_Success(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/drivers/123/online", strings.NewReader("{}"))
 	req.SetPathValue("driver_id", "123")
-	token := newToken(t, "123", "DRIVER", secretKey)
+	token := newToken(t, "123", "ADMIN", secretKey)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rr := httptest.NewRecorder()
 

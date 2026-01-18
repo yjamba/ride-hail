@@ -3,7 +3,6 @@ package repositories
 import (
 	"context"
 	"encoding/json"
-
 	"ride-hail/internal/driver/domain/models"
 	"ride-hail/internal/driver/domain/ports"
 	"ride-hail/internal/shared/postgres"
@@ -118,6 +117,63 @@ func (d *DriverRepository) UpdateRideStatus(ctx context.Context, rideID string, 
 	return d.db.TxManager.WithTx(ctx, func(txCtx context.Context) error {
 		return d.updateRideStatusWithTx(txCtx, postgres.GetTxFromContext(txCtx), rideID, status)
 	})
+}
+
+func (d *DriverRepository) FindAvailableDriversNearby(
+	ctx context.Context,
+	lat, lon float64,
+	vehicleType string,
+	radiusMeters int,
+) ([]models.DriverWithDistance, error) {
+	q := `
+SELECT d.id, u.email, d.rating, c.latitude, c.longitude,
+       ST_Distance(
+         ST_MakePoint(c.longitude, c.latitude)::geography,
+         ST_MakePoint($1, $2)::geography
+       ) / 1000 as distance_km
+FROM drivers d
+JOIN users u ON d.id = u.id
+JOIN coordinates c ON c.entity_id = d.id
+  AND c.entity_type = 'driver'
+  AND c.is_current = true
+WHERE d.status = 'AVAILABLE'
+  AND d.vehicle_type = $3
+  AND ST_DWithin(
+        ST_MakePoint(c.longitude, c.latitude)::geography,
+        ST_MakePoint($1, $2)::geography,
+        $4
+      )
+ORDER BY distance_km, d.rating DESC
+LIMIT 10;
+`
+
+	rows, err := d.db.Query(ctx, q, lat, lon, vehicleType, radiusMeters)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var drivers []models.DriverWithDistance
+	for rows.Next() {
+		var dr models.DriverWithDistance
+		if err := rows.Scan(
+			&dr.ID,
+			&dr.Email,
+			&dr.Rating,
+			&dr.Latitude,
+			&dr.Longitude,
+			&dr.DistanceKm,
+		); err != nil {
+			return nil, err
+		}
+		drivers = append(drivers, dr)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return drivers, nil
 }
 
 func (d *DriverRepository) updateRideStatusWithTx(ctx context.Context, tx *postgres.Tx, rideID string, status models.RideStatus) error {

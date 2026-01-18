@@ -27,19 +27,19 @@ func (d *DriverRepository) GetById(ctx context.Context, id string) (*models.Driv
             drivers 
         WHERE 
             id = $1`
-	var driver *models.Driver
+	var driver models.Driver
 	var vehicleAttrsJSON []byte
 	var statusStr string
 
 	err := d.db.QueryRow(ctx, q, id).Scan(
-		&driver.ID,
-		&driver.UserID,
-		&driver.LicenseNumber,
-		&driver.VehicleType,
-		&vehicleAttrsJSON,
-		&driver.TotalRides,
-		&driver.TotalEarnings,
-		&statusStr,
+		driver.ID,
+		driver.UserID,
+		driver.LicenseNumber,
+		driver.VehicleType,
+		vehicleAttrsJSON,
+		driver.TotalRides,
+		driver.TotalEarnings,
+		statusStr,
 	)
 	if err != nil {
 		return nil, err
@@ -53,7 +53,7 @@ func (d *DriverRepository) GetById(ctx context.Context, id string) (*models.Driv
 
 	driver.Status = models.DriverStatus(statusStr)
 
-	return driver, nil
+	return &driver, nil
 }
 
 // Update implements [ports.DriverRepository].

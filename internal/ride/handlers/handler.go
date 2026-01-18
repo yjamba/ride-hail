@@ -3,7 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
+	"time"
 
 	"ride-hail/internal/ride/domain/models"
 	"ride-hail/internal/ride/handlers/dto"
@@ -29,18 +29,25 @@ func (h *RideHandler) CreateRide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Default to ECONOMY if not specified
+	vehicleType := models.VehicleType(req.RideType)
+	if !vehicleType.IsValid() {
+		vehicleType = models.VehicleTypeEconomy
+	}
+
 	// Create the ride command
 	cmd := models.CreateRideCommand{
 		PassengerID: req.PassengerID,
+		VehicleType: vehicleType,
 		Pickup: models.Location{
-			Latitude:  req.PickupLat,
-			Longitude: req.PickupLon,
-			Address:   req.PickupAddr,
+			Latitude:  req.PickupLatitude,
+			Longitude: req.PickupLongitude,
+			Address:   req.PickupAddress,
 		},
 		Destination: models.Location{
-			Latitude:  req.DestLat,
-			Longitude: req.DestLon,
-			Address:   req.DestAddress,
+			Latitude:  req.DestinationLatitude,
+			Longitude: req.DestinationLongitude,
+			Address:   req.DestinationAddress,
 		},
 	}
 
@@ -51,23 +58,30 @@ func (h *RideHandler) CreateRide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Respond with the created ride ID
+	// Build response per README spec
+	resp := dto.RideResponse{
+		RideID:                   ride.ID,
+		RideNumber:               ride.RideNumber,
+		Status:                   string(ride.Status),
+		EstimatedFare:            getFloat(ride.EstimatedFare),
+		EstimatedDurationMinutes: ride.EstimatedDurationMinutes,
+		EstimatedDistanceKm:      ride.EstimatedDistanceKm,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{
-		"ride_id": ride.ID,
-	})
+	json.NewEncoder(w).Encode(resp)
 }
 
 // CloseRide handles the cancellation of a ride
 func (h *RideHandler) CloseRide(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 3 {
-		http.Error(w, "invalid URL", http.StatusBadRequest)
+
+	rideID := r.PathValue("ride_id")
+	if rideID == "" {
+		http.Error(w, "ride_id is required", http.StatusBadRequest)
 		return
 	}
-	rideID := parts[len(parts)-1]
 
 	// Decode the JSON request body
 	var req dto.CancelRideRequest
@@ -82,10 +96,22 @@ func (h *RideHandler) CloseRide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Respond with success
+	// Respond per README spec
+	resp := dto.CancelRideResponse{
+		RideID:      rideID,
+		Status:      "CANCELLED",
+		CancelledAt: time.Now().Format(time.RFC3339),
+		Message:     "Ride cancelled successfully",
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
-		"message": "Ride canceled successfully",
-	})
+	json.NewEncoder(w).Encode(resp)
+}
+
+func getFloat(f *float64) float64 {
+	if f == nil {
+		return 0
+	}
+	return *f
 }

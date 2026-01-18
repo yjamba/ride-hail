@@ -23,32 +23,67 @@ services:
     networks:
       - ride-hail-network
 
-  driver-service:
+  admin-service:
     build:
       context: .
-      dockerfile: ./cmd/driver/Dockerfile
+      dockerfile: ./cmd/admin/Dockerfile
       args:
-        BUILD_TARGET: ./cmd/driver
+        BUILD_TARGET: ./cmd/admin
     ports:
-      - "3002:3002"
+      - "3003:3003"
     environment:
-      - PORT=3002
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
       - POSTGRES_DB=${POSTGRES_DB:-ride_hail}
-      - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_PORT=5672
-      - RABBITMQ_USER=${RABBIT_USER:-guest}
-      - RABBITMQ_PASSWORD=${RABBIT_PASSWORD:-guest}
-      - RABBITMQ_VHOST=${RABBIT_VHOST:-/}
+      - PORT=3003
     depends_on:
       postgres:
         condition: service_healthy
-      rabbitmq:
+    restart: unless-stopped
+    networks:
+      - ride-hail-network
+
+  ride-service:
+    build:
+      context: .
+      dockerfile: ./cmd/ride/Dockerfile
+      args:
+        BUILD_TARGET: ./cmd/ride
+    ports:
+      - "3004:3004"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=${POSTGRES_DB:-ride_hail}
+      - PORT=3004
+    depends_on:
+      postgres:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - ride-hail-network
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: ride-hail-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - ride-hail-network
 
@@ -110,6 +145,7 @@ volumes:
     driver: local
   rabbitmq-log:
     driver: local
+  rabbitmq_data:
 
 networks:
   ride-hail-network:

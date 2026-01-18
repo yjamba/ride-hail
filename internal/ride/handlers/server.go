@@ -10,6 +10,7 @@ import (
 type Server struct {
 	rideHandler  *RideHandler
 	serverConfig *ServerConfig
+	secretKey    []byte
 
 	server *http.Server
 
@@ -17,10 +18,11 @@ type Server struct {
 	cancel context.CancelFunc
 }
 
-func NewServer(rideHandler *RideHandler, serverConfig *ServerConfig) *Server {
+func NewServer(rideHandler *RideHandler, serverConfig *ServerConfig, secretKey []byte) *Server {
 	return &Server{
 		rideHandler:  rideHandler,
 		serverConfig: serverConfig,
+		secretKey:    secretKey,
 	}
 }
 
@@ -29,13 +31,13 @@ func (s *Server) Start(ctx context.Context) error {
 
 	s.server = &http.Server{
 		Addr:    s.serverConfig.GetAddr(),
-		Handler: RegisterRoutes(s.rideHandler),
+		Handler: RegisterRoutes(s.rideHandler, s.secretKey),
 		BaseContext: func(l net.Listener) context.Context {
 			return s.ctx
 		},
 	}
 
-	slog.Info("starting auth server", "addr", s.serverConfig.GetAddr())
+	slog.Info("starting ride server", "addr", s.serverConfig.GetAddr())
 	if err := s.server.ListenAndServe(); err != http.ErrServerClosed {
 		return err
 	}
@@ -44,7 +46,7 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 func (s *Server) Stop(ctx context.Context) error {
-	slog.Info("stopping auth server")
+	slog.Info("stopping ride server")
 	if s.cancel != nil {
 		s.cancel()
 	}

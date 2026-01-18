@@ -48,9 +48,11 @@ func (f *fakeTxManager) WithTx(ctx context.Context, fn func(context.Context) err
 	return fn(ctx)
 }
 
-var _ ports.UserRepository = (*fakeUserRepo)(nil)
-var _ ports.DriverRepository = (*fakeDriverRepo)(nil)
-var _ ports.TransactionManager = (*fakeTxManager)(nil)
+var (
+	_ ports.UserRepository     = (*fakeUserRepo)(nil)
+	_ ports.DriverRepository   = (*fakeDriverRepo)(nil)
+	_ ports.TransactionManager = (*fakeTxManager)(nil)
+)
 
 func TestAuthService_Signup_InvalidEmail(t *testing.T) {
 	svc := NewAuthService(NewTokenService([]byte("secret")), &fakeUserRepo{}, &fakeDriverRepo{}, &fakeTxManager{})

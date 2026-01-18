@@ -5,10 +5,11 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"ride-hail/internal/ride/domain/models"
-	"ride-hail/internal/ride/service"
 	"strings"
 	"testing"
+
+	"ride-hail/internal/ride/domain/models"
+	"ride-hail/internal/ride/service"
 )
 
 // Mock repository for testing
@@ -61,7 +62,7 @@ func (m *mockRideRepo) CloseRide(ctx context.Context, id, reason string) error {
 }
 
 func TestNewRideHandler(t *testing.T) {
-	svc := service.NewRideService(&mockRideRepo{}, []byte("secret"))
+	svc := service.NewRideService(&mockRideRepo{}, nil, nil, []byte("secret"))
 	h := NewRideHandler(svc)
 	if h == nil {
 		t.Fatal("expected non-nil handler")
@@ -82,17 +83,18 @@ func TestCreateRide_InvalidJSON(t *testing.T) {
 
 func TestCreateRide_Success(t *testing.T) {
 	repo := &mockRideRepo{}
-	svc := service.NewRideService(repo, []byte("secret"))
+	svc := service.NewRideService(repo, nil, nil, []byte("secret"))
 	h := NewRideHandler(svc)
 
 	body := `{
 		"passenger_id": "passenger-123",
-		"pickup_lat": 43.238949,
-		"pickup_lon": 76.889709,
+		"pickup_latitude": 43.238949,
+		"pickup_longitude": 76.889709,
 		"pickup_address": "Almaty Central Park",
-		"dest_lat": 43.222015,
-		"dest_lon": 76.851511,
-		"dest_address": "Kok-Tobe Hill"
+		"destination_latitude": 43.222015,
+		"destination_longitude": 76.851511,
+		"destination_address": "Kok-Tobe Hill",
+		"ride_type": "ECONOMY"
 	}`
 
 	req := httptest.NewRequest(http.MethodPost, "/rides", strings.NewReader(body))
@@ -107,13 +109,15 @@ func TestCreateRide_Success(t *testing.T) {
 
 func TestCreateRide_InvalidCoordinates(t *testing.T) {
 	repo := &mockRideRepo{}
-	svc := service.NewRideService(repo, []byte("secret"))
+	svc := service.NewRideService(repo, nil, nil, []byte("secret"))
 	h := NewRideHandler(svc)
 
 	body := `{
 		"passenger_id": "passenger-123",
-		"pickup_lat": 100,
-		"pickup_lon": 76.889709
+		"pickup_latitude": 100,
+		"pickup_longitude": 76.889709,
+		"destination_latitude": 43.222015,
+		"destination_longitude": 76.851511
 	}`
 
 	req := httptest.NewRequest(http.MethodPost, "/rides", strings.NewReader(body))
@@ -132,15 +136,15 @@ func TestCreateRide_ServiceError(t *testing.T) {
 			return errors.New("db error")
 		},
 	}
-	svc := service.NewRideService(repo, []byte("secret"))
+	svc := service.NewRideService(repo, nil, nil, []byte("secret"))
 	h := NewRideHandler(svc)
 
 	body := `{
 		"passenger_id": "passenger-123",
-		"pickup_lat": 43.238949,
-		"pickup_lon": 76.889709,
-		"dest_lat": 43.222015,
-		"dest_lon": 76.851511
+		"pickup_latitude": 43.238949,
+		"pickup_longitude": 76.889709,
+		"destination_latitude": 43.222015,
+		"destination_longitude": 76.851511
 	}`
 
 	req := httptest.NewRequest(http.MethodPost, "/rides", strings.NewReader(body))
@@ -179,11 +183,12 @@ func TestCloseRide_InvalidJSON(t *testing.T) {
 
 func TestCloseRide_Success(t *testing.T) {
 	repo := &mockRideRepo{}
-	svc := service.NewRideService(repo, []byte("secret"))
+	svc := service.NewRideService(repo, nil, nil, []byte("secret"))
 	h := NewRideHandler(svc)
 
 	body := `{"reason": "changed my mind"}`
 	req := httptest.NewRequest(http.MethodPost, "/rides/ride-123/cancel", strings.NewReader(body))
+	req.SetPathValue("ride_id", "ride-123")
 	rr := httptest.NewRecorder()
 
 	h.CloseRide(rr, req)
@@ -199,11 +204,12 @@ func TestCloseRide_ServiceError(t *testing.T) {
 			return errors.New("db error")
 		},
 	}
-	svc := service.NewRideService(repo, []byte("secret"))
+	svc := service.NewRideService(repo, nil, nil, []byte("secret"))
 	h := NewRideHandler(svc)
 
 	body := `{"reason": "changed my mind"}`
 	req := httptest.NewRequest(http.MethodPost, "/rides/ride-123/cancel", strings.NewReader(body))
+	req.SetPathValue("ride_id", "ride-123")
 	rr := httptest.NewRecorder()
 
 	h.CloseRide(rr, req)

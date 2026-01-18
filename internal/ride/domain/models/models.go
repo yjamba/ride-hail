@@ -29,9 +29,11 @@ type Ride struct {
 	CancelledAt        *time.Time `json:"cancelled_at,omitempty"`
 	CancellationReason string     `json:"cancellation_reason,omitempty"`
 
-	// Financial
-	EstimatedFare *float64 `json:"estimated_fare,omitempty"`
-	FinalFare     *float64 `json:"final_fare,omitempty"`
+	// Financial & Estimates
+	EstimatedFare            *float64 `json:"estimated_fare,omitempty"`
+	FinalFare                *float64 `json:"final_fare,omitempty"`
+	EstimatedDurationMinutes int      `json:"estimated_duration_minutes,omitempty"`
+	EstimatedDistanceKm      float64  `json:"estimated_distance_km,omitempty"`
 
 	// Metadata
 	CreatedAt time.Time `json:"created_at"`

@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"context"
-
 	"ride-hail/internal/driver/domain/models"
 	"ride-hail/internal/driver/domain/ports"
 	"ride-hail/internal/shared/postgres"
@@ -35,6 +34,34 @@ func (h *DriverSessionsRepository) GetById(ctx context.Context, id string) (*mod
 	if err != nil {
 		return nil, err
 	}
+	return driverSession, nil
+}
+
+func (h *DriverSessionsRepository) GetActiveByDriverID(ctx context.Context, driverID string) (*models.DriverSession, error) {
+	q := `SELECT 
+            id, driver_id, started_at, ended_at, total_rides, total_earnings
+        FROM driver_sessions 
+        WHERE driver_id = $1 AND ended_at IS NULL
+        ORDER BY started_at DESC
+        LIMIT 1`
+
+	driverSession := &models.DriverSession{}
+	err := h.db.QueryRow(ctx, q, driverID).Scan(
+		&driverSession.ID,
+		&driverSession.DriverID,
+		&driverSession.StartedAt,
+		&driverSession.EndedAt,
+		&driverSession.TotalRides,
+		&driverSession.TotalEarnings,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// if driverSession.EndedAt != nil {
+	// 	return nil, errors.New("no active session found")
+	// }
+
 	return driverSession, nil
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-
 	"ride-hail/internal/ride/domain/models"
 	"ride-hail/internal/ride/domain/ports"
 	"ride-hail/internal/shared/postgres"
@@ -25,27 +24,47 @@ func NewRideRepo(db *postgres.Database) ports.RideRepository {
 
 // CreateRide inserts a new ride into the database
 func (r *RideRepo) CreateRide(ctx context.Context, ride *models.Ride) error {
-	query := `INSERT INTO rides (
-		passenger_id,
-		status,
-		pickup_location,
-		destination_location
-	)
-	VALUES ($1, $2, $3, $4)
-	RETURNING id, requested_at, created_at, updated_at`
-
-	err := r.db.QueryRow(
-		ctx,
-		query,
-		ride.PassengerID,
-		ride.Status,
-		ride.PickupLocation,
-		ride.DestinationLocation,
-	).Scan(&ride.ID, &ride.RequestedAt, &ride.CreatedAt, &ride.UpdatedAt)
+	tx, err := r.db.BeginTx(ctx)
 	if err != nil {
 		return err
 	}
-	return nil
+	defer tx.Rollback(ctx)
+
+	var pickupID string
+	err = tx.QueryRow(
+		ctx,
+		`INSERT INTO coordinates (
+		entity_id, entity_type, latitude, longitude, address
+	) VALUES ($1, $2, $3, $4, $5)
+	RETURNING id`,
+		ride.PassengerID,
+		"passenger",
+		ride.PickupLocation.Latitude,
+		ride.PickupLocation.Longitude,
+		ride.PickupLocation.Address, // если есть поле Address
+	).Scan(&pickupID)
+	if err != nil {
+		return err
+	}
+
+	var destinationID string
+	err = tx.QueryRow(
+		ctx,
+		`INSERT INTO coordinates (
+		entity_id, entity_type, latitude, longitude, address
+	) VALUES ($1, $2, $3, $4, $5)
+	RETURNING id`,
+		ride.PassengerID,
+		"passenger",
+		ride.DestinationLocation.Latitude,
+		ride.DestinationLocation.Longitude,
+		ride.DestinationLocation.Address,
+	).Scan(&destinationID)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
 
 // GetRide fetches a ride by its ID

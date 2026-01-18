@@ -28,31 +28,42 @@ func NewRideService(repo ports.RideRepository, publisher ports.Publish, log *log
 	}
 }
 
-func (s *RideService) CreateRide(ctx context.Context, cmd models.CreateRideCommand) (*models.Ride, error) {
+func (s *RideService) CreateRide(
+	ctx context.Context,
+	cmd models.CreateRideCommand,
+) (*models.Ride, error) {
+
+	// 1. Валидация координат
 	if err := validateLanLon(cmd.Pickup.Latitude, cmd.Pickup.Longitude); err != nil {
-		s.logError(ctx, "validation_error", "Invalid pickup coordinates", err)
-		return nil, err
-	}
-	if err := validateLanLon(cmd.Destination.Latitude, cmd.Destination.Longitude); err != nil {
-		s.logError(ctx, "validation_error", "Invalid destination coordinates", err)
+		s.logError(ctx, "validation_error", "invalid pickup coordinates", err)
 		return nil, err
 	}
 
-	// Calculate distance and duration estimates
+	if err := validateLanLon(cmd.Destination.Latitude, cmd.Destination.Longitude); err != nil {
+		s.logError(ctx, "validation_error", "invalid destination coordinates", err)
+		return nil, err
+	}
+
+	// 2. Расчёты (чистая бизнес-логика)
 	distanceKm := calculateDistance(
 		cmd.Pickup.Latitude, cmd.Pickup.Longitude,
 		cmd.Destination.Latitude, cmd.Destination.Longitude,
 	)
-	durationMinutes := estimateDuration(distanceKm)
 
-	// Calculate fare based on vehicle type
+	durationMin := estimateDuration(distanceKm)
+
 	vehicleType := cmd.VehicleType
 	if !vehicleType.IsValid() {
 		vehicleType = models.VehicleTypeEconomy
 	}
-	pricing := models.PricingTable[vehicleType]
-	estimatedFare := pricing.BaseFare + (distanceKm * pricing.RatePerKm) + (float64(durationMinutes) * pricing.RatePerMin)
 
+	pricing := models.PricingTable[vehicleType]
+	estimatedFare :=
+		pricing.BaseFare +
+			distanceKm*pricing.RatePerKm +
+			float64(durationMin)*pricing.RatePerMin
+
+	// 3. Формирование доменной сущности
 	ride := &models.Ride{
 		PassengerID:              cmd.PassengerID,
 		VehicleType:              vehicleType,
@@ -62,30 +73,30 @@ func (s *RideService) CreateRide(ctx context.Context, cmd models.CreateRideComma
 		RequestedAt:              time.Now(),
 		EstimatedFare:            &estimatedFare,
 		EstimatedDistanceKm:      distanceKm,
-		EstimatedDurationMinutes: durationMinutes,
+		EstimatedDurationMinutes: durationMin,
 	}
+
+	// 4. Сохранение (одна точка выхода в БД)
 	if err := s.repo.CreateRide(ctx, ride); err != nil {
-		s.logError(ctx, "db_error", "Failed to create ride in database", err)
+		s.logError(ctx, "db_error", "failed to create ride", err)
 		return nil, err
 	}
 
-	// Add ride_id to context for logging
+	// 5. Логирование с ride_id
 	ctx = logger.WithRideID(ctx, ride.ID)
 
-	s.logInfo(ctx, "ride_requested", "New ride request created", map[string]interface{}{
-		"passenger_id":   ride.PassengerID,
-		"vehicle_type":   ride.VehicleType,
-		"pickup":         ride.PickupLocation,
-		"destination":    ride.DestinationLocation,
+	s.logInfo(ctx, "ride_created", "ride successfully created", map[string]any{
+		"passenger_id": ride.PassengerID,
+		"vehicle_type": ride.VehicleType,
 		"estimated_fare": estimatedFare,
-		"distance_km":    distanceKm,
-		"duration_min":   durationMinutes,
+		"distance_km": distanceKm,
+		"duration_min": durationMin,
 	})
 
-	// Publish ride match request to message broker
+	// 6. Асинхронные побочные эффекты
 	if err := s.publishRideMatchRequest(ctx, ride); err != nil {
-		s.logError(ctx, "publish_error", "Failed to publish ride match request", err)
-		// Don't fail the ride creation if publishing fails
+		s.logError(ctx, "publish_error", "failed to publish ride match request", err)
+		// ❗ ride НЕ откатываем
 	}
 
 	return ride, nil

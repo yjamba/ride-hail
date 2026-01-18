@@ -34,8 +34,8 @@ func main() {
 	// Initialize structured logger
 	log := logger.NewLogger("ride-service", getEnv("LOG_LEVEL", "info"))
 
-	port := 4001
-	if p, err := strconv.Atoi(getEnv("RIDE_SERVICE_PORT", "4001")); err == nil {
+	port := 3004
+	if p, err := strconv.Atoi(getEnv("RIDE_SERVICE_PORT", "3004")); err == nil {
 		port = p
 	}
 
@@ -45,10 +45,10 @@ func main() {
 	}
 
 	// Database configuration
-	dbHost := getEnv("POSTGRES_HOST", "localhost")
+	dbHost := getEnv("POSTGRES_HOST", "postgres")
 	dbPort := getEnv("POSTGRES_PORT", "5432")
-	dbUser := getEnv("POSTGRES_USER", "postgres")
-	dbPassword := getEnv("POSTGRES_PASSWORD", "password")
+	dbUser := getEnv("POSTGRES_USER", "your_username")
+	dbPassword := getEnv("POSTGRES_PASSWORD", "your_password")
 	dbName := getEnv("POSTGRES_DB", "ride_hail")
 	dbSSL := getEnv("POSTGRES_SSLMODE", "disable")
 

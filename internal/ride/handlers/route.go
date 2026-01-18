@@ -11,7 +11,7 @@ func RegisterRoutes(handler *RideHandler, secretKey []byte) http.Handler {
 
 	// REST API routes
 	mux.Handle("POST /rides", jsonPost(handler.CreateRide))
-	mux.Handle("POST /rides/cancel", jsonPost(handler.CloseRide))
+	mux.Handle("POST /rides/{ride_id}/cancel", jsonPost(handler.CloseRide))
 
 	// WebSocket route for passengers
 	mux.HandleFunc("GET /ws/passengers/{passenger_id}", PassengerWSHandler(secretKey))

@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"ride-hail/internal/ride/domain/models"
 	"ride-hail/internal/ride/handlers/dto"
@@ -62,12 +61,12 @@ func (h *RideHandler) CreateRide(w http.ResponseWriter, r *http.Request) {
 // CloseRide handles the cancellation of a ride
 func (h *RideHandler) CloseRide(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 3 {
-		http.Error(w, "invalid URL", http.StatusBadRequest)
+
+	rideID := r.PathValue("ride_id")
+	if rideID == "" {
+		http.Error(w, "ride_id is required", http.StatusBadRequest)
 		return
 	}
-	rideID := parts[len(parts)-1]
 
 	// Decode the JSON request body
 	var req dto.CancelRideRequest

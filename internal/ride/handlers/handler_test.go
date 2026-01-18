@@ -185,6 +185,7 @@ func TestCloseRide_Success(t *testing.T) {
 
 	body := `{"reason": "changed my mind"}`
 	req := httptest.NewRequest(http.MethodPost, "/rides/ride-123/cancel", strings.NewReader(body))
+	req.SetPathValue("ride_id", "ride-123")
 	rr := httptest.NewRecorder()
 
 	h.CloseRide(rr, req)
@@ -205,6 +206,7 @@ func TestCloseRide_ServiceError(t *testing.T) {
 
 	body := `{"reason": "changed my mind"}`
 	req := httptest.NewRequest(http.MethodPost, "/rides/ride-123/cancel", strings.NewReader(body))
+	req.SetPathValue("ride_id", "ride-123")
 	rr := httptest.NewRecorder()
 
 	h.CloseRide(rr, req)

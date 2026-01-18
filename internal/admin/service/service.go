@@ -2,23 +2,23 @@ package service
 
 import (
 	"context"
-	"log/slog"
 
 	"ride-hail/internal/admin/domain/models"
 	"ride-hail/internal/admin/domain/ports"
+	"ride-hail/internal/shared/logger"
 )
 
 type Service struct {
 	metricsRepo ports.MetricsRepository
 	ridesRepo   ports.RidesRepository
-	logger      *slog.Logger
+	logger      *logger.Logger
 }
 
-func NewService(metrics ports.MetricsRepository, rides ports.RidesRepository, logger *slog.Logger) *Service {
+func NewService(metrics ports.MetricsRepository, rides ports.RidesRepository, log *logger.Logger) *Service {
 	return &Service{
 		metricsRepo: metrics,
 		ridesRepo:   rides,
-		logger:      logger,
+		logger:      log,
 	}
 }
 

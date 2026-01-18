@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log/slog"
 	"os"
 	"os/signal"
 	"sync"
@@ -18,7 +17,6 @@ import (
 )
 
 func main() {
-	logger.InitLogger("debug")
 	_ = config.LoadEnv()
 
 	getEnv := func(key, def string) string {
@@ -27,6 +25,10 @@ func main() {
 		}
 		return def
 	}
+
+	// Initialize structured logger
+	log := logger.NewLogger("auth-service", getEnv("LOG_LEVEL", "info"))
+	ctx := context.Background()
 
 	port := 3001
 	if p, err := strconv.Atoi(getEnv("PORT", "3001")); err == nil {
@@ -46,18 +48,20 @@ func main() {
 	dbSSL := getEnv("POSTGRES_SSLMODE", "disable")
 
 	dbConfig := postgres.NewDBConfig(dbHost, dbPort, dbUser, dbPassword, dbName, dbSSL)
-	slog.Info("connecting to database",
-		"host", dbHost,
-		"port", dbPort,
-		"user", dbUser,
-		"db", dbName,
-		"sslmode", dbSSL,
-	)
+	log.InfoWithFields(ctx, "db_connecting", "Connecting to database", map[string]interface{}{
+		"host":    dbHost,
+		"port":    dbPort,
+		"user":    dbUser,
+		"db":      dbName,
+		"sslmode": dbSSL,
+	})
+
 	db := postgres.NewDB(dbConfig)
-	if err := db.Connect(context.Background()); err != nil {
-		slog.Error("failed to connect to the database", "error", err.Error())
+	if err := db.Connect(ctx); err != nil {
+		log.Error(ctx, "db_connect_error", "Failed to connect to the database", err)
 		os.Exit(1)
 	}
+	log.Info(ctx, "db_connected", "Successfully connected to database")
 
 	secret := getEnv("SECRET_KEY", getEnv("SECRET-KEY", "supersecretkey"))
 	app := auth.NewApp([]byte(secret), serverConfig, db)
@@ -65,11 +69,11 @@ func main() {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
-	slog.Info("starting auth service...")
+	log.Info(ctx, "server_starting", "Starting auth service")
 	go func() {
 		defer wg.Done()
-		if err := app.Start(context.Background()); err != nil {
-			slog.Error("failed to start auth service", "error", err.Error())
+		if err := app.Start(ctx); err != nil {
+			log.Error(ctx, "server_error", "Failed to start auth service", err)
 		}
 	}()
 
@@ -77,12 +81,12 @@ func main() {
 		ticker := time.NewTicker(time.Second * 10)
 		defer ticker.Stop()
 		for range ticker.C {
-			if !db.IsHealthy(context.Background()) {
-				slog.Error("database connection is not healthy")
-				if err := db.Reconnect(context.Background()); err != nil {
-					slog.Error("failed to reconnect to the database", "error", err.Error())
+			if !db.IsHealthy(ctx) {
+				log.Error(ctx, "db_health_error", "Database connection is not healthy", nil)
+				if err := db.Reconnect(ctx); err != nil {
+					log.Error(ctx, "db_reconnect_error", "Failed to reconnect to the database", err)
 				} else {
-					slog.Info("successfully reconnected to the database")
+					log.Info(ctx, "db_reconnected", "Successfully reconnected to the database")
 				}
 			}
 		}
@@ -92,13 +96,15 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	<-sigChan
+	log.Info(ctx, "shutdown_initiated", "Received shutdown signal, stopping service")
 
-	ctx, cancel := context.WithCancel(context.Background())
+	shutdownCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err := app.Stop(ctx); err != nil {
-		slog.Error("failed to stop auth service", "error", err.Error())
+	if err := app.Stop(shutdownCtx); err != nil {
+		log.Error(ctx, "shutdown_error", "Failed to stop auth service", err)
 	}
 
+	log.Info(ctx, "shutdown_complete", "Auth service stopped successfully")
 	wg.Wait()
 }

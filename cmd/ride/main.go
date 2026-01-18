@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
-	"log/slog"
 	"os"
 	"os/signal"
 	"strconv"
 	"sync"
 	"syscall"
+	"time"
 
 	"ride-hail/internal/ride"
 	"ride-hail/internal/ride/handlers"
@@ -15,162 +15,198 @@ import (
 	"ride-hail/internal/shared/broker/messages"
 	"ride-hail/internal/shared/broker/rabbitmq"
 	"ride-hail/internal/shared/config"
+	"ride-hail/internal/shared/logger"
 	"ride-hail/internal/shared/postgres"
 )
 
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+ctx, cancel := context.WithCancel(context.Background())
+defer cancel()
 
-	_ = config.LoadEnv()
-	getEnv := func(key, def string) string {
-		if v := os.Getenv(key); v != "" {
-			return v
-		}
-		return def
-	}
+_ = config.LoadEnv()
+getEnv := func(key, def string) string {
+if v := os.Getenv(key); v != "" {
+return v
+}
+return def
+}
 
-	port := 4001
-	if p, err := strconv.Atoi(getEnv("RIDE_SERVICE_PORT", "4001")); err == nil {
-		port = p
-	}
+// Initialize structured logger
+log := logger.NewLogger("ride-service", getEnv("LOG_LEVEL", "info"))
 
-	config := &handlers.ServerConfig{
-		Addr: getEnv("RIDE_SERVICE_HOST", "0.0.0.0"),
-		Port: port,
-	}
+port := 4001
+if p, err := strconv.Atoi(getEnv("RIDE_SERVICE_PORT", "4001")); err == nil {
+port = p
+}
 
-	brokerConfig := broker.NewBrokerConfigFromEnv()
-	rmq := rabbitmq.NewRMQ(brokerConfig)
-	if err := rmq.Connect(context.Background()); err != nil {
-		slog.Error("failed to connect to rabbitmq", "error", err.Error())
-		os.Exit(1)
-	}
+serverConfig := &handlers.ServerConfig{
+Addr: getEnv("RIDE_SERVICE_HOST", "0.0.0.0"),
+Port: port,
+}
 
-	if err := rmq.DeclareExchanges(messages.ExchangeRideTopic, "topic", true, false, false, false, nil); err != nil {
-		slog.Error("failed to declare ride exchange", "error", err.Error())
-		os.Exit(1)
-	}
-	if err := rmq.DeclareExchanges(messages.ExchangeDriverTopic, "topic", true, false, false, false, nil); err != nil {
-		slog.Error("failed to declare driver exchange", "error", err.Error())
-		os.Exit(1)
-	}
-	if err := rmq.DeclareExchanges(messages.ExchangeLocationFanout, "fanout", true, false, false, false, nil); err != nil {
-		slog.Error("failed to declare location exchange", "error", err.Error())
-		os.Exit(1)
-	}
+// Database configuration
+dbHost := getEnv("POSTGRES_HOST", "localhost")
+dbPort := getEnv("POSTGRES_PORT", "5432")
+dbUser := getEnv("POSTGRES_USER", "postgres")
+dbPassword := getEnv("POSTGRES_PASSWORD", "password")
+dbName := getEnv("POSTGRES_DB", "ride_hail")
+dbSSL := getEnv("POSTGRES_SSLMODE", "disable")
 
-	queues := []broker.QueueConfig{
-		{
-			Name:       messages.QueueRideRequests,
-			Durable:    true,
-			AutoDelete: false,
-			Exclusive:  false,
-			NoWait:     false,
-			Exchange:   messages.ExchangeRideTopic,
-			RoutingKey: "ride.request.*",
-		},
-		{
-			Name:       messages.QueueRideStatus,
-			Durable:    true,
-			AutoDelete: false,
-			Exclusive:  false,
-			NoWait:     false,
-			Exchange:   messages.ExchangeRideTopic,
-			RoutingKey: "ride.status.*",
-		},
-		{
-			Name:       messages.QueueDriverResponses,
-			Durable:    true,
-			AutoDelete: false,
-			Exclusive:  false,
-			NoWait:     false,
-			Exchange:   messages.ExchangeDriverTopic,
-			RoutingKey: "driver.response.*",
-		},
-		{
-			Name:       messages.QueueDriverStatus,
-			Durable:    true,
-			AutoDelete: false,
-			Exclusive:  false,
-			NoWait:     false,
-			Exchange:   messages.ExchangeDriverTopic,
-			RoutingKey: "driver.status.*",
-		},
-		{
-			Name:       messages.QueueLocationUpdatesRide,
-			Durable:    true,
-			AutoDelete: false,
-			Exclusive:  false,
-			NoWait:     false,
-			Exchange:   messages.ExchangeLocationFanout,
-			RoutingKey: "",
-		},
-	}
+dbConfig := postgres.NewDBConfig(dbHost, dbPort, dbUser, dbPassword, dbName, dbSSL)
+log.InfoWithFields(ctx, "db_connecting", "Connecting to database", map[string]interface{}{
+"host": dbHost,
+"port": dbPort,
+"db":   dbName,
+})
 
-	if err := rmq.DeclareQueues(queues); err != nil {
-		slog.Error("failed to declare queues", "error", err.Error())
-		os.Exit(1)
-	}
+db := postgres.NewDB(dbConfig)
+if err := db.Connect(ctx); err != nil {
+log.Error(ctx, "db_connect_error", "Failed to connect to database", err)
+os.Exit(1)
+}
+log.Info(ctx, "db_connected", "Successfully connected to database")
 
-	dbHost := getEnv("POSTGRES_HOST", "postgres")
-	dbPort := getEnv("POSTGRES_PORT", "5432")
-	dbUser := getEnv("POSTGRES_USER", "postgres")
-	dbPassword := getEnv("POSTGRES_PASSWORD", "password")
-	dbName := getEnv("POSTGRES_DB", "ride_hail")
-	dbSSL := getEnv("POSTGRES_SSLMODE", "disable")
+// RabbitMQ configuration
+brokerConfig := broker.NewBrokerConfigFromEnv()
+rmq := rabbitmq.NewRMQ(brokerConfig)
+if err := rmq.Connect(ctx); err != nil {
+log.Error(ctx, "rabbitmq_connect_error", "Failed to connect to RabbitMQ", err)
+os.Exit(1)
+}
+log.Info(ctx, "rabbitmq_connected", "Successfully connected to RabbitMQ")
 
-	dbConfig := postgres.NewDBConfig(dbHost, dbPort, dbUser, dbPassword, dbName, dbSSL)
-	db := postgres.NewDB(dbConfig)
-	if err := db.Connect(ctx); err != nil {
-		slog.Error("failed to connect to postgres", "error", err.Error())
-		os.Exit(1)
-	}
+// Declare exchanges
+if err := rmq.DeclareExchanges(messages.ExchangeRideTopic, "topic", true, false, false, false, nil); err != nil {
+log.Error(ctx, "exchange_declare_error", "Failed to declare ride exchange", err)
+os.Exit(1)
+}
+if err := rmq.DeclareExchanges(messages.ExchangeDriverTopic, "topic", true, false, false, false, nil); err != nil {
+log.Error(ctx, "exchange_declare_error", "Failed to declare driver exchange", err)
+os.Exit(1)
+}
+if err := rmq.DeclareExchanges(messages.ExchangeLocationFanout, "fanout", true, false, false, false, nil); err != nil {
+log.Error(ctx, "exchange_declare_error", "Failed to declare location exchange", err)
+os.Exit(1)
+}
+log.Info(ctx, "exchanges_declared", "All RabbitMQ exchanges declared successfully")
 
-	app := ride.NewApp(config, db, rmq)
+// Declare queues
+queues := []broker.QueueConfig{
+{
+Name:       messages.QueueRideRequests,
+Durable:    true,
+AutoDelete: false,
+Exclusive:  false,
+NoWait:     false,
+Exchange:   messages.ExchangeRideTopic,
+RoutingKey: "ride.request.*",
+},
+{
+Name:       messages.QueueRideStatus,
+Durable:    true,
+AutoDelete: false,
+Exclusive:  false,
+NoWait:     false,
+Exchange:   messages.ExchangeRideTopic,
+RoutingKey: "ride.status.*",
+},
+{
+Name:       messages.QueueDriverResponses,
+Durable:    true,
+AutoDelete: false,
+Exclusive:  false,
+NoWait:     false,
+Exchange:   messages.ExchangeDriverTopic,
+RoutingKey: "driver.response.*",
+},
+{
+Name:       messages.QueueDriverStatus,
+Durable:    true,
+AutoDelete: false,
+Exclusive:  false,
+NoWait:     false,
+Exchange:   messages.ExchangeDriverTopic,
+RoutingKey: "driver.status.*",
+},
+{
+Name:       messages.QueueLocationUpdatesRide,
+Durable:    true,
+AutoDelete: false,
+Exclusive:  false,
+NoWait:     false,
+Exchange:   messages.ExchangeLocationFanout,
+RoutingKey: "",
+},
+}
 
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := app.Start(context.Background()); err != nil {
-			slog.Error("failed to start auth service", "error", err.Error())
-		}
-	}()
+if err := rmq.DeclareQueues(queues); err != nil {
+log.Error(ctx, "queue_declare_error", "Failed to declare queues", err)
+os.Exit(1)
+}
+log.Info(ctx, "queues_declared", "All RabbitMQ queues declared successfully")
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+app := ride.NewApp(serverConfig, db, rmq, log)
 
-		if !db.IsHealthy(ctx) {
-			slog.Error("postgres is not healthy")
-			if err := db.Reconnect(ctx); err != nil {
-				slog.Error("failed to reconnect to postgres", "error", err.Error())
-			} else {
-				slog.Info("reconnected to postgres")
-			}
-		}
+wg := &sync.WaitGroup{}
+wg.Add(1)
+go func() {
+defer wg.Done()
+if err := app.Start(ctx); err != nil {
+log.Error(ctx, "server_error", "Failed to start ride service", err)
+}
+}()
 
-		if !rmq.IsHealthy(ctx) {
-			slog.Error("rabbitmq is not healthy")
-			if err := rmq.Reconnect(ctx); err != nil {
-				slog.Error("failed to reconnect to rabbitmq", "error", err.Error())
-			} else {
-				slog.Info("reconnected to rabbitmq")
-			}
-		}
-	}()
+// Health check goroutine
+wg.Add(1)
+go func() {
+defer wg.Done()
+ticker := time.NewTicker(10 * time.Second)
+defer ticker.Stop()
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+for {
+select {
+case <-ctx.Done():
+return
+case <-ticker.C:
+if !db.IsHealthy(ctx) {
+log.Error(ctx, "db_health_error", "Database connection is not healthy", nil)
+if err := db.Reconnect(ctx); err != nil {
+log.Error(ctx, "db_reconnect_error", "Failed to reconnect to database", err)
+} else {
+log.Info(ctx, "db_reconnected", "Successfully reconnected to database")
+}
+}
 
-	<-sigChan
+if !rmq.IsHealthy(ctx) {
+log.Error(ctx, "rabbitmq_health_error", "RabbitMQ connection is not healthy", nil)
+if err := rmq.Reconnect(ctx); err != nil {
+log.Error(ctx, "rabbitmq_reconnect_error", "Failed to reconnect to RabbitMQ", err)
+} else {
+log.Info(ctx, "rabbitmq_reconnected", "Successfully reconnected to RabbitMQ")
+}
+}
+}
+}
+}()
+
+sigChan := make(chan os.Signal, 1)
+signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+<-sigChan
+	log.Info(ctx, "shutdown_initiated", "Received shutdown signal, stopping service")
+
+	cancel()
 
 	if err := app.Stop(ctx); err != nil {
-		slog.Error("failed to stop ride service", "error", err.Error())
+		log.Error(ctx, "shutdown_error", "Failed to stop ride service", err)
 	}
 	if err := rmq.Close(ctx); err != nil {
-		slog.Error("failed to close rabbitmq", "error", err.Error())
+		log.Error(ctx, "rabbitmq_close_error", "Failed to close RabbitMQ connection", err)
 	}
-	wg.Wait()
+	if err := db.Close(); err != nil {
+		log.Error(ctx, "db_close_error", "Failed to close database connection", err)
+	}
+
+	log.Info(ctx, "shutdown_complete", "Ride service stopped successfully")
+wg.Wait()
 }

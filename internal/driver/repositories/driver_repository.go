@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"encoding/json"
+
 	"ride-hail/internal/driver/domain/models"
 	"ride-hail/internal/driver/domain/ports"
 	"ride-hail/internal/shared/postgres"
@@ -186,9 +187,4 @@ func (d *DriverRepository) GetRideByID(ctx context.Context, rideID string) (*mod
 	ride.Status = models.RideStatus(statusStr)
 
 	return &ride, nil
-}
-
-// WithTransaction provides transaction wrapper
-func (d *DriverRepository) WithTransaction(ctx context.Context, fn func(context.Context) error) error {
-	return d.db.TxManager.WithTx(ctx, fn)
 }

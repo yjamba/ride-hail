@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
+
 	"ride-hail/internal/driver/domain/models"
 	"ride-hail/internal/driver/domain/ports"
-	"time"
 )
 
 type DriverService struct {
@@ -17,9 +18,18 @@ type DriverService struct {
 	coordinateRepo ports.CoordinateRepository
 	consume        ports.Consume
 	publish        ports.Publish
+	txManager      ports.TransactionManager
 }
 
-func NewDriverService(repo ports.DriverRepository, sessionRepo ports.DriverSessionsRepository, locationRepo ports.HistoryLocationRepository, coordinateRepo ports.CoordinateRepository, consume ports.Consume, publish ports.Publish) *DriverService {
+func NewDriverService(
+	repo ports.DriverRepository,
+	sessionRepo ports.DriverSessionsRepository,
+	locationRepo ports.HistoryLocationRepository,
+	coordinateRepo ports.CoordinateRepository,
+	consume ports.Consume,
+	publish ports.Publish,
+	txManager ports.TransactionManager,
+) *DriverService {
 	return &DriverService{
 		repo:           repo,
 		sessionRepo:    sessionRepo,
@@ -27,6 +37,7 @@ func NewDriverService(repo ports.DriverRepository, sessionRepo ports.DriverSessi
 		coordinateRepo: coordinateRepo,
 		consume:        consume,
 		publish:        publish,
+		txManager:      txManager,
 	}
 }
 
@@ -41,7 +52,7 @@ func (s *DriverService) GoOnline(ctx context.Context, driverID string, lat, lon 
 
 	// Start transaction
 	var sessionID string
-	err := s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
+	err := s.txManager.WithTx(ctx, func(txCtx context.Context) error {
 		// Get current driver status
 		driver, err := s.repo.GetById(txCtx, driverID)
 		if err != nil {
@@ -110,7 +121,7 @@ func (s *DriverService) GoOffline(ctx context.Context, driverID string) (*models
 
 	var summary *models.SessionSummary
 
-	err := s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
+	err := s.txManager.WithTx(ctx, func(txCtx context.Context) error {
 		// Get current driver
 		driver, err := s.repo.GetById(txCtx, driverID)
 		if err != nil {
@@ -188,7 +199,7 @@ func (s *DriverService) UpdateLocation(ctx context.Context, driverID string, upd
 
 	// Update location in transaction
 	var coordID string
-	err = s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
+	err = s.txManager.WithTx(ctx, func(txCtx context.Context) error {
 		// Create/Update coordinate
 		coordID, err = s.coordinateRepo.CreateOrUpdate(txCtx, driverID, "driver",
 			update.Latitude, update.Longitude, update.Address)
@@ -239,7 +250,7 @@ func (s *DriverService) StartRide(ctx context.Context, driverID, rideID string, 
 		return errors.New("rideID cannot be empty")
 	}
 
-	err := s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
+	err := s.txManager.WithTx(ctx, func(txCtx context.Context) error {
 		// Verify driver status
 		driver, err := s.repo.GetById(txCtx, driverID)
 		if err != nil {
@@ -300,7 +311,7 @@ func (s *DriverService) CompleteRide(ctx context.Context, driverID, rideID strin
 
 	var driverEarnings float64
 
-	err := s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
+	err := s.txManager.WithTx(ctx, func(txCtx context.Context) error {
 		// Update ride status to COMPLETED
 		if err := s.repo.UpdateRideStatus(txCtx, rideID, models.RideStatusCompleted); err != nil {
 			return fmt.Errorf("failed to update ride status: %w", err)

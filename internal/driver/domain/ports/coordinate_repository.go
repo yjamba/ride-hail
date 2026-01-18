@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+
 	"ride-hail/internal/driver/domain/models"
 )
 

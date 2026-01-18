@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"encoding/json"
+
 	"ride-hail/internal/driver/domain/models"
 	"ride-hail/internal/driver/domain/ports"
 	"ride-hail/internal/shared/postgres"

@@ -12,12 +12,13 @@ import (
 	"ride-hail/internal/driver"
 	"ride-hail/internal/shared/broker"
 	"ride-hail/internal/shared/broker/rabbitmq"
+	"ride-hail/internal/shared/config"
 	"ride-hail/internal/shared/logger"
 	"ride-hail/internal/shared/postgres"
 )
 
 func main() {
-	logger.InitLogger("debug")
+	_ = config.LoadEnv()
 
 	getEnv := func(key, def string) string {
 		if v := os.Getenv(key); v != "" {
@@ -25,8 +26,10 @@ func main() {
 		}
 		return def
 	}
+	log := logger.NewLogger("auth-service", getEnv("LOG_LEVEL", "info"))
+	_ = log
 
-	dbHost := getEnv("POSTGRES_HOST", "localhost")
+	dbHost := getEnv("POSTGRES_HOST", "postgres")
 	dbPort := getEnv("POSTGRES_PORT", "5432")
 	dbUser := getEnv("POSTGRES_USER", "ride-hail")
 	dbPassword := getEnv("POSTGRES_PASSWORD", "ride-hail")

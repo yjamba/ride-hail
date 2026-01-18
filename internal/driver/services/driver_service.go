@@ -184,17 +184,17 @@ func (s *DriverService) UpdateLocation(ctx context.Context, driverID string, upd
 	}
 
 	if err := validateLatLon(update.Latitude, update.Longitude); err != nil {
-		return "",err
+		return "", err
 	}
 
 	// Verify driver is online
 	driver, err := s.repo.GetById(ctx, driverID)
 	if err != nil {
-		return "",fmt.Errorf("failed to get driver: %w", err)
+		return "", fmt.Errorf("failed to get driver: %w", err)
 	}
 
 	if driver.Status == models.Offline {
-		return "",errors.New("cannot update location: driver offline")
+		return "", errors.New("cannot update location: driver offline")
 	}
 
 	// Update location in transaction
@@ -223,7 +223,7 @@ func (s *DriverService) UpdateLocation(ctx context.Context, driverID string, upd
 		return s.locationRepo.AddLocation(txCtx, historyLoc)
 	})
 	if err != nil {
-		return "",err
+		return "", err
 	}
 
 	// Broadcast location update to fanout exchange

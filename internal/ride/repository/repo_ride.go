@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+
 	"ride-hail/internal/ride/domain/models"
 	"ride-hail/internal/ride/domain/ports"
 	"ride-hail/internal/shared/postgres"

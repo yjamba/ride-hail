@@ -42,9 +42,9 @@ func main() {
 	// Read DB config from environment (with sensible defaults matching docker-compose)
 	dbHost := getEnv("POSTGRES_HOST", "postgres")
 	dbPort := getEnv("POSTGRES_PORT", "5432")
-	dbUser := getEnv("POSTGRES_USER", "postgres")
-	dbPassword := getEnv("POSTGRES_PASSWORD", "password")
-	dbName := getEnv("POSTGRES_DB", "ride_hail")
+	dbUser := getEnv("POSTGRES_USER", "ride-hail")
+	dbPassword := getEnv("POSTGRES_PASSWORD", "ride-hail")
+	dbName := getEnv("POSTGRES_DB", "ride-hail-db")
 	dbSSL := getEnv("POSTGRES_SSLMODE", "disable")
 
 	dbConfig := postgres.NewDBConfig(dbHost, dbPort, dbUser, dbPassword, dbName, dbSSL)

@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
+
 	"ride-hail/internal/ride/domain/models"
 	"ride-hail/internal/ride/domain/ports"
 	"ride-hail/internal/shared/broker/messages"
 	"ride-hail/internal/shared/logger"
-	"time"
 )
 
 type RideService struct {

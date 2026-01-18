@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+
 	"ride-hail/internal/driver/domain/models"
 	"ride-hail/internal/shared/postgres"
 )

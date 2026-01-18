@@ -93,7 +93,7 @@ func (h *DriverHandler) UpdateDriverLocation(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
 		"coordinate_id": coordID,
-		"updated_at": time.Now().Format(time.RFC3339),
+		"updated_at":    time.Now().Format(time.RFC3339),
 	})
 }
 
@@ -117,10 +117,10 @@ func (h *DriverHandler) StartRide(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
-		"ride_id": req.RideID,
-		"status":  "BUSY",
+		"ride_id":    req.RideID,
+		"status":     "BUSY",
 		"started_at": time.Now().Format(time.RFC3339),
-		"message": "Ride started successfully",
+		"message":    "Ride started successfully",
 	})
 }
 
@@ -145,10 +145,10 @@ func (h *DriverHandler) CompleteRide(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
-		"ride_id": req.RideID,
-		"status":  "AVAILABLE",
-		"completed_at": time.Now().Format(time.RFC3339),
-		"driver_earnings":  fmt.Sprintf("%.2f", earnings),
-		"message": "Ride completed successfully",
+		"ride_id":         req.RideID,
+		"status":          "AVAILABLE",
+		"completed_at":    time.Now().Format(time.RFC3339),
+		"driver_earnings": fmt.Sprintf("%.2f", earnings),
+		"message":         "Ride completed successfully",
 	})
 }

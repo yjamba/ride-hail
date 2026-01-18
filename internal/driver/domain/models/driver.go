@@ -58,13 +58,13 @@ type Coordinate struct {
 }
 
 type LocationUpdate struct {
-	Latitude       float64
-	Longitude      float64
-	Address        string
-	AccuracyMeters *float64
-	SpeedKmh       *float64
-	HeadingDegrees *float64
-	RideID         *string
+	Latitude       float64  `json:"latitude"`
+	Longitude      float64  `json:"longitude"`
+	Address        string   `json:"address,omitempty"`
+	AccuracyMeters *float64 `json:"accuracy_meters"`
+	SpeedKmh       *float64 `json:"speed_kmh"`
+	HeadingDegrees *float64 `json:"heading_degrees"`
+	RideID         *string  `json:"ride_id,omitempty"`
 }
 
 type SessionSummary struct {

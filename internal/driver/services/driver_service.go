@@ -178,23 +178,23 @@ func (s *DriverService) GoOffline(ctx context.Context, driverID string) (*models
 	return summary, nil
 }
 
-func (s *DriverService) UpdateLocation(ctx context.Context, driverID string, update *models.LocationUpdate) error {
+func (s *DriverService) UpdateLocation(ctx context.Context, driverID string, update *models.LocationUpdate) (string, error) {
 	if driverID == "" {
-		return errors.New("driverID cannot be empty")
+		return "", errors.New("driverID cannot be empty")
 	}
 
 	if err := validateLatLon(update.Latitude, update.Longitude); err != nil {
-		return err
+		return "",err
 	}
 
 	// Verify driver is online
 	driver, err := s.repo.GetById(ctx, driverID)
 	if err != nil {
-		return fmt.Errorf("failed to get driver: %w", err)
+		return "",fmt.Errorf("failed to get driver: %w", err)
 	}
 
 	if driver.Status == models.Offline {
-		return errors.New("cannot update location: driver offline")
+		return "",errors.New("cannot update location: driver offline")
 	}
 
 	// Update location in transaction
@@ -223,7 +223,7 @@ func (s *DriverService) UpdateLocation(ctx context.Context, driverID string, upd
 		return s.locationRepo.AddLocation(txCtx, historyLoc)
 	})
 	if err != nil {
-		return err
+		return "",err
 	}
 
 	// Broadcast location update to fanout exchange
@@ -242,7 +242,7 @@ func (s *DriverService) UpdateLocation(ctx context.Context, driverID string, upd
 	data, _ := json.Marshal(locationMsg)
 	_ = s.publish.Publish("location_fanout", "", data)
 
-	return nil
+	return coordID, nil
 }
 
 func (s *DriverService) StartRide(ctx context.Context, driverID, rideID string, lat, lon float64) error {
@@ -304,9 +304,9 @@ func (s *DriverService) StartRide(ctx context.Context, driverID, rideID string, 
 
 func (s *DriverService) CompleteRide(ctx context.Context, driverID, rideID string,
 	finalLat, finalLon, actualDistance float64, actualDuration int,
-) error {
+) (float64, error) {
 	if rideID == "" {
-		return errors.New("rideID cannot be empty")
+		return 0.0, errors.New("rideID cannot be empty")
 	}
 
 	var driverEarnings float64
@@ -375,7 +375,7 @@ func (s *DriverService) CompleteRide(ctx context.Context, driverID, rideID strin
 		return s.sessionRepo.Update(txCtx, session)
 	})
 	if err != nil {
-		return err
+		return 0.0, err
 	}
 
 	// Publish ride completion
@@ -391,7 +391,7 @@ func (s *DriverService) CompleteRide(ctx context.Context, driverID, rideID strin
 	routingKey := fmt.Sprintf("ride.status.%s", models.RideStatusCompleted.String())
 	_ = s.publish.Publish("ride_topic", routingKey, data)
 
-	return nil
+	return driverEarnings, nil
 }
 
 func validateLatLon(lat, lon float64) error {

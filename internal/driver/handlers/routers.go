@@ -15,9 +15,9 @@ func RegisterRoutes(handler *DriverHandler, ws *ws.WSHandler) http.Handler {
 
 	mux.HandleFunc("POST /drivers/{driver_id}/online", middleware.WrapHandler(handler.ChangeDriverStatusToOnline))
 	mux.HandleFunc("/ws/drivers/{driver_id}", middleware.WrapHandler(ws.ServeWS))
-	// mux.HandleFunc("POST /drivers/{driver_id}/offline", nil)
-	// mux.HandleFunc("POST /drivers/{driver_id}/location", nil)
-	// mux.HandleFunc("POST /drivers/{driver_id}/start", nil)
+	mux.HandleFunc("POST /drivers/{driver_id}/offline", middleware.WrapHandler(handler.ChangeDriverStatusToOffline))
+	mux.HandleFunc("POST /drivers/{driver_id}/location", middleware.WrapHandler(handler.UpdateDriverLocation))
+	mux.HandleFunc("POST /drivers/{driver_id}/start", middleware.WrapHandler(handler.StartRide))
 	// mux.HandleFunc("POST /drivers/{driver_id}/complete", nil)
 
 	return mux

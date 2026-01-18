@@ -105,7 +105,7 @@ func main() {
 	}
 	slog.Info("queues declared successfully")
 
-	app := driver.NewApp()
+	app := driver.NewApp(db, rabbit)
 	go func() {
 		defer wg.Done()
 		if err := app.Start(ctx); err != nil {

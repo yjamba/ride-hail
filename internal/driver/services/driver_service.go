@@ -109,7 +109,7 @@ func (s *DriverService) GoOnline(ctx context.Context, driverID string, lat, lon 
 
 	data, _ := json.Marshal(statusUpdate)
 	routingKey := fmt.Sprintf("driver.status.%s", driverID)
-	_ = s.publish.Publish("driver_topic", routingKey, data)
+	_ = s.publish.Publish(ctx, "driver_topic", routingKey, data)
 
 	return sessionID, nil
 }
@@ -173,7 +173,7 @@ func (s *DriverService) GoOffline(ctx context.Context, driverID string) (*models
 
 	data, _ := json.Marshal(statusUpdate)
 	routingKey := fmt.Sprintf("driver.status.%s", driverID)
-	_ = s.publish.Publish("driver_topic", routingKey, data)
+	_ = s.publish.Publish(ctx, "driver_topic", routingKey, data)
 
 	return summary, nil
 }
@@ -240,7 +240,7 @@ func (s *DriverService) UpdateLocation(ctx context.Context, driverID string, upd
 	}
 
 	data, _ := json.Marshal(locationMsg)
-	_ = s.publish.Publish("location_fanout", "", data)
+	_ = s.publish.Publish(ctx, "location_fanout", "", data)
 
 	return coordID, nil
 }
@@ -297,7 +297,7 @@ func (s *DriverService) StartRide(ctx context.Context, driverID, rideID string, 
 
 	data, _ := json.Marshal(statusUpdate)
 	routingKey := fmt.Sprintf("ride.status.%s", models.RideStatusInProgress.String())
-	_ = s.publish.Publish("ride_topic", routingKey, data)
+	_ = s.publish.Publish(ctx, "ride_topic", routingKey, data)
 
 	return nil
 }
@@ -389,7 +389,7 @@ func (s *DriverService) CompleteRide(ctx context.Context, driverID, rideID strin
 
 	data, _ := json.Marshal(statusUpdate)
 	routingKey := fmt.Sprintf("ride.status.%s", models.RideStatusCompleted.String())
-	_ = s.publish.Publish("ride_topic", routingKey, data)
+	_ = s.publish.Publish(ctx, "ride_topic", routingKey, data)
 
 	return driverEarnings, nil
 }

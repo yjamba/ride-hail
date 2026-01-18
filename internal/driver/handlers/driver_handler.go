@@ -16,8 +16,10 @@ type DriverHandler struct {
 	service *services.DriverService
 }
 
-func NewDriverHandler() *DriverHandler {
-	return &DriverHandler{}
+func NewDriverHandler(service *services.DriverService) *DriverHandler {
+	return &DriverHandler{
+		service: service,
+	}
 }
 
 func (h *DriverHandler) ChangeDriverStatusToOnline(w http.ResponseWriter, r *http.Request) {

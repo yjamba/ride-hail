@@ -27,7 +27,7 @@ func NewMatchingService(notifier ports.Notifier, consume ports.Consume, driverRe
 func (m *MatchingService) Start(ctx context.Context) error {
 	// Start consuming from the matching queue.
 	// The Consume interface returns a channel of raw message bytes.
-	ch, err := m.consume.Consume(messages.ExchangeDriverTopic, "ride.request")
+	ch, err := m.consume.Consume(ctx, messages.ExchangeDriverTopic, "ride.request")
 	if err != nil {
 		return err
 	}

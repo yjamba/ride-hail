@@ -20,10 +20,11 @@ type Server struct {
 	cancel context.CancelFunc
 }
 
-func NewServer(handler *DriverHandler, config *ServerConfig) *Server {
+func NewServer(handler *DriverHandler, wsHandler *ws.WSHandler, config *ServerConfig) *Server {
 	return &Server{
-		handler: handler,
-		config:  config,
+		handler:   handler,
+		wsHandler: wsHandler,
+		config:    config,
 	}
 }
 

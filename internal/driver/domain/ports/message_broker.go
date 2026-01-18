@@ -1,11 +1,15 @@
 package ports
 
-import "ride-hail/internal/shared/broker/rabbitmq"
+import (
+	"context"
+
+	"ride-hail/internal/shared/broker/rabbitmq"
+)
 
 type Consume interface {
-	Consume(queueName, queueKey string) (<-chan rabbitmq.Message, error)
+	Consume(ctx context.Context, queueName, queueKey string) (<-chan rabbitmq.Message, error)
 }
 
 type Publish interface {
-	Publish(exchange, queueKey string, body []byte) error
+	Publish(ctx context.Context, exchange, queueKey string, body []byte) error
 }

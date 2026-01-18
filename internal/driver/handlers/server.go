@@ -6,12 +6,15 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+
+	"ride-hail/internal/driver/handlers/ws"
 )
 
 type Server struct {
-	server  *http.Server
-	config  *ServerConfig
-	handler *DriverHandler
+	server    *http.Server
+	config    *ServerConfig
+	handler   *DriverHandler
+	wsHandler *ws.WSHandler
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -28,7 +31,7 @@ func (s *Server) Start(ctx context.Context) error {
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.server = &http.Server{
 		Addr:    s.config.GetAddr(),
-		Handler: RegisterRoutes(s.handler),
+		Handler: RegisterRoutes(s.handler, s.wsHandler),
 		BaseContext: func(l net.Listener) context.Context {
 			return s.ctx
 		},

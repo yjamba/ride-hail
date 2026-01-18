@@ -38,13 +38,31 @@ func (s *RideService) CreateRide(ctx context.Context, cmd models.CreateRideComma
 		return nil, err
 	}
 
+	// Calculate distance and duration estimates
+	distanceKm := calculateDistance(
+		cmd.Pickup.Latitude, cmd.Pickup.Longitude,
+		cmd.Destination.Latitude, cmd.Destination.Longitude,
+	)
+	durationMinutes := estimateDuration(distanceKm)
+
+	// Calculate fare based on vehicle type
+	vehicleType := cmd.VehicleType
+	if !vehicleType.IsValid() {
+		vehicleType = models.VehicleTypeEconomy
+	}
+	pricing := models.PricingTable[vehicleType]
+	estimatedFare := pricing.BaseFare + (distanceKm * pricing.RatePerKm) + (float64(durationMinutes) * pricing.RatePerMin)
+
 	ride := &models.Ride{
-		PassengerID:         cmd.PassengerID,
-		VehicleType:         cmd.VehicleType,
-		Status:              models.RideStatusRequested,
-		PickupLocation:      cmd.Pickup,
-		DestinationLocation: cmd.Destination,
-		RequestedAt:         time.Now(),
+		PassengerID:              cmd.PassengerID,
+		VehicleType:              vehicleType,
+		Status:                   models.RideStatusRequested,
+		PickupLocation:           cmd.Pickup,
+		DestinationLocation:      cmd.Destination,
+		RequestedAt:              time.Now(),
+		EstimatedFare:            &estimatedFare,
+		EstimatedDistanceKm:      distanceKm,
+		EstimatedDurationMinutes: durationMinutes,
 	}
 	if err := s.repo.CreateRide(ctx, ride); err != nil {
 		s.logError(ctx, "db_error", "Failed to create ride in database", err)
@@ -55,10 +73,13 @@ func (s *RideService) CreateRide(ctx context.Context, cmd models.CreateRideComma
 	ctx = logger.WithRideID(ctx, ride.ID)
 
 	s.logInfo(ctx, "ride_requested", "New ride request created", map[string]interface{}{
-		"passenger_id": ride.PassengerID,
-		"vehicle_type": ride.VehicleType,
-		"pickup":       ride.PickupLocation,
-		"destination":  ride.DestinationLocation,
+		"passenger_id":   ride.PassengerID,
+		"vehicle_type":   ride.VehicleType,
+		"pickup":         ride.PickupLocation,
+		"destination":    ride.DestinationLocation,
+		"estimated_fare": estimatedFare,
+		"distance_km":    distanceKm,
+		"duration_min":   durationMinutes,
 	})
 
 	// Publish ride match request to message broker
@@ -129,6 +150,98 @@ func contains(slice []string, value string) bool {
 		}
 	}
 	return false
+}
+
+// calculateDistance calculates the distance in km between two coordinates using Haversine formula
+func calculateDistance(lat1, lon1, lat2, lon2 float64) float64 {
+	const earthRadiusKm = 6371.0
+
+	lat1Rad := lat1 * (3.141592653589793 / 180.0)
+	lat2Rad := lat2 * (3.141592653589793 / 180.0)
+	deltaLat := (lat2 - lat1) * (3.141592653589793 / 180.0)
+	deltaLon := (lon2 - lon1) * (3.141592653589793 / 180.0)
+
+	a := sin(deltaLat/2)*sin(deltaLat/2) +
+		cos(lat1Rad)*cos(lat2Rad)*sin(deltaLon/2)*sin(deltaLon/2)
+	c := 2 * atan2(sqrt(a), sqrt(1-a))
+
+	return earthRadiusKm * c
+}
+
+// estimateDuration estimates ride duration in minutes based on distance
+// Assumes average speed of 30 km/h in city traffic
+func estimateDuration(distanceKm float64) int {
+	avgSpeedKmh := 30.0
+	durationHours := distanceKm / avgSpeedKmh
+	return int(durationHours * 60)
+}
+
+// Math helper functions to avoid math package import
+func sin(x float64) float64 {
+	// Taylor series approximation
+	x = fmod(x, 2*3.141592653589793)
+	sum := x
+	term := x
+	for i := 1; i < 10; i++ {
+		term *= -x * x / float64((2*i)*(2*i+1))
+		sum += term
+	}
+	return sum
+}
+
+func cos(x float64) float64 {
+	return sin(x + 3.141592653589793/2)
+}
+
+func sqrt(x float64) float64 {
+	if x <= 0 {
+		return 0
+	}
+	z := x / 2
+	for i := 0; i < 10; i++ {
+		z = (z + x/z) / 2
+	}
+	return z
+}
+
+func atan2(y, x float64) float64 {
+	if x > 0 {
+		return atan(y / x)
+	}
+	if x < 0 && y >= 0 {
+		return atan(y/x) + 3.141592653589793
+	}
+	if x < 0 && y < 0 {
+		return atan(y/x) - 3.141592653589793
+	}
+	if x == 0 && y > 0 {
+		return 3.141592653589793 / 2
+	}
+	if x == 0 && y < 0 {
+		return -3.141592653589793 / 2
+	}
+	return 0
+}
+
+func atan(x float64) float64 {
+	// Taylor series for small x
+	if x > 1 {
+		return 3.141592653589793/2 - atan(1/x)
+	}
+	if x < -1 {
+		return -3.141592653589793/2 - atan(1/x)
+	}
+	sum := x
+	term := x
+	for i := 1; i < 20; i++ {
+		term *= -x * x
+		sum += term / float64(2*i+1)
+	}
+	return sum
+}
+
+func fmod(x, y float64) float64 {
+	return x - float64(int(x/y))*y
 }
 
 // publishRideMatchRequest publishes a ride match request to the message broker

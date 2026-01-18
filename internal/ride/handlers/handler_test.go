@@ -88,12 +88,13 @@ func TestCreateRide_Success(t *testing.T) {
 
 	body := `{
 		"passenger_id": "passenger-123",
-		"pickup_lat": 43.238949,
-		"pickup_lon": 76.889709,
+		"pickup_latitude": 43.238949,
+		"pickup_longitude": 76.889709,
 		"pickup_address": "Almaty Central Park",
-		"dest_lat": 43.222015,
-		"dest_lon": 76.851511,
-		"dest_address": "Kok-Tobe Hill"
+		"destination_latitude": 43.222015,
+		"destination_longitude": 76.851511,
+		"destination_address": "Kok-Tobe Hill",
+		"ride_type": "ECONOMY"
 	}`
 
 	req := httptest.NewRequest(http.MethodPost, "/rides", strings.NewReader(body))
@@ -113,8 +114,10 @@ func TestCreateRide_InvalidCoordinates(t *testing.T) {
 
 	body := `{
 		"passenger_id": "passenger-123",
-		"pickup_lat": 100,
-		"pickup_lon": 76.889709
+		"pickup_latitude": 100,
+		"pickup_longitude": 76.889709,
+		"destination_latitude": 43.222015,
+		"destination_longitude": 76.851511
 	}`
 
 	req := httptest.NewRequest(http.MethodPost, "/rides", strings.NewReader(body))
@@ -138,10 +141,10 @@ func TestCreateRide_ServiceError(t *testing.T) {
 
 	body := `{
 		"passenger_id": "passenger-123",
-		"pickup_lat": 43.238949,
-		"pickup_lon": 76.889709,
-		"dest_lat": 43.222015,
-		"dest_lon": 76.851511
+		"pickup_latitude": 43.238949,
+		"pickup_longitude": 76.889709,
+		"destination_latitude": 43.222015,
+		"destination_longitude": 76.851511
 	}`
 
 	req := httptest.NewRequest(http.MethodPost, "/rides", strings.NewReader(body))

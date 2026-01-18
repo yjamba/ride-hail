@@ -106,27 +106,6 @@ services:
     networks:
       - ride-hail-network
 
-  rabbitmq:
-    image: rabbitmq:3-management
-    container_name: ride-hail-rabbitmq
-    environment:
-      - RABBITMQ_DEFAULT_USER=${RABBIT_USER:-guest}
-      - RABBITMQ_DEFAULT_PASS=${RABBIT_PASSWORD:-guest}
-    ports:
-      - 5672:5672
-      - 15672:15672
-    volumes:
-      - rabbitmq-lib:/var/lib/rabbitmq/
-      - rabbitmq-log:/var/log/rabbitmq
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 40s
-    networks:
-      - ride-hail-network
-
   migrate:
     image: migrate/migrate
     depends_on:

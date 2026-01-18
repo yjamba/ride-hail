@@ -81,24 +81,13 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		if claims.Role != "DRIVER" {
+		if claims.Role != "ADMIN" {
 			sendError(w, errorMessage{
 				StatusCode: http.StatusForbidden,
-				Message:    "Access denied: driver role required",
+				Message:    "Access denied: admin role required",
 			})
 			return
 		}
-
-		id := r.PathValue("driver_id")
-
-		if id != claims.UserId {
-			sendError(w, errorMessage{
-				StatusCode: http.StatusForbidden,
-				Message:    "Access denied: you can only access your own driver profile",
-			})
-			return
-		}
-
 		next.ServeHTTP(w, r)
 	}
 }

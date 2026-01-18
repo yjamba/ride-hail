@@ -8,7 +8,7 @@ import (
 )
 
 type Server struct {
-	rideHandler  *RideHandler
+	authHandler  *Handler
 	serverConfig *ServerConfig
 
 	server *http.Server
@@ -17,9 +17,9 @@ type Server struct {
 	cancel context.CancelFunc
 }
 
-func NewServer(rideHandler *RideHandler, serverConfig *ServerConfig) *Server {
+func NewServer(authHandler *Handler, serverConfig *ServerConfig) *Server {
 	return &Server{
-		rideHandler:  rideHandler,
+		authHandler:  authHandler,
 		serverConfig: serverConfig,
 	}
 }
@@ -29,7 +29,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	s.server = &http.Server{
 		Addr:    s.serverConfig.GetAddr(),
-		Handler: RegisterRoutes(s.rideHandler),
+		Handler: RegisterRoutes(s.authHandler),
 		BaseContext: func(l net.Listener) context.Context {
 			return s.ctx
 		},

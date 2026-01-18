@@ -9,7 +9,7 @@ type Driver struct {
 	LicenseNumber string
 	VehicleType   string
 	VehicleAttrs  VehicleAttributes
-
+	Rating        float64
 	TotalRides    int
 	TotalEarnings float64
 
@@ -38,7 +38,7 @@ type DriverSession struct {
 
 type LocationHistory struct {
 	ID             string
-	CoordinateID   *string
+	CoordinateID   string
 	DriverID       string
 	Latitude       float64
 	Longitude      float64
@@ -47,4 +47,29 @@ type LocationHistory struct {
 	HeadingDegrees *float64
 	RecordedAt     time.Time
 	RideID         *string
+}
+
+type Coordinate struct {
+	ID        string
+	Latitude  float64
+	Longitude float64
+	Address   string
+	CreatedAt time.Time
+}
+
+type LocationUpdate struct {
+	Latitude       float64
+	Longitude      float64
+	Address        string
+	AccuracyMeters *float64
+	SpeedKmh       *float64
+	HeadingDegrees *float64
+	RideID         *string
+}
+
+type SessionSummary struct {
+	SessionID      string
+	DurationHours  float64
+	RidesCompleted int
+	Earnings       float64
 }

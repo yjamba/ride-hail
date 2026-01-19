@@ -34,7 +34,7 @@ func (d *DriverRepository) Save(ctx context.Context, driver *models.Driver) (str
 }
 
 func (d *DriverRepository) saveWithTx(ctx context.Context, tx *postgres.Tx, driver *models.Driver) (string, error) {
-	query := "INSERT INTO drivers (user_id, license_number, vehicle_attrs) VALUES ($1, $2, $3) RETURNING id"
+	query := "INSERT INTO drivers (user_id, license_number, vehicle_type, vehicle_attrs, status) VALUES ($1, $2, $3, $4, $5) RETURNING id"
 	var id string
 
 	vehicleInfo, err := json.Marshal(driver.VehicleAttrs)
@@ -42,7 +42,12 @@ func (d *DriverRepository) saveWithTx(ctx context.Context, tx *postgres.Tx, driv
 		return "", err
 	}
 
-	err = tx.QueryRow(ctx, query, driver.UserID, driver.LicenseNumber, vehicleInfo).Scan(&id)
+	vehicleType := driver.VehicleType
+	if vehicleType == "" {
+		vehicleType = "ECONOMY"
+	}
+
+	err = tx.QueryRow(ctx, query, driver.UserID, driver.LicenseNumber, vehicleType, vehicleInfo, "OFFLINE").Scan(&id)
 	if err != nil {
 		return "", err
 	}

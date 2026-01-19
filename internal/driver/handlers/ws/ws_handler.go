@@ -17,7 +17,7 @@ func (h *WSHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 	driverID := r.PathValue("driver_id")
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		slog.Info("upgrade error: %v", err)
+		slog.Info("upgrade error", "err", err.Error())
 		return
 	}
 	c := &connection{

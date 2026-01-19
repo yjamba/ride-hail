@@ -22,7 +22,7 @@ func NewDriverRepository(db *postgres.Database) ports.DriverRepository {
 // GetById implements [ports.DriverRepository].
 func (d *DriverRepository) GetById(ctx context.Context, id string) (*models.Driver, error) {
 	q := `SELECT 
-            id, license_number, vehicle_type, vehicle_attrs, rating, total_rides, total_earnings, status
+            id, license_number, COALESCE(vehicle_type, 'ECONOMY'), vehicle_attrs, rating, total_rides, total_earnings, COALESCE(status, 'OFFLINE')
         FROM 
             drivers 
         WHERE 

@@ -102,3 +102,68 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		next.ServeHTTP(w, r)
 	}
 }
+
+// PassengerAuthMiddleware validates JWT tokens for passengers
+func PassengerAuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tokenString := r.Header.Get("Authorization")
+		if tokenString == "" {
+			sendError(w, errorMessage{
+				StatusCode: http.StatusUnauthorized,
+				Message:    "Authorization header is required",
+			})
+			return
+		}
+
+		if !strings.HasPrefix(tokenString, "Bearer ") {
+			sendError(w, errorMessage{
+				StatusCode: http.StatusBadRequest,
+				Message:    "Authorization header must be in the format 'Bearer <token>'",
+			})
+			return
+		}
+
+		tokenString = tokenString[len("Bearer "):]
+
+		claims := &UserClaims{}
+		token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (any, error) {
+			if t.Method != jwt.SigningMethodHS256 {
+				return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+			}
+
+			return []byte(secretKey), nil
+		})
+		if err != nil {
+			if strings.Contains(err.Error(), "signature") {
+				sendError(w, errorMessage{
+					StatusCode: http.StatusUnauthorized,
+					Message:    "Invalid token signature",
+				})
+			} else {
+				sendError(w, errorMessage{
+					StatusCode: http.StatusBadRequest,
+					Message:    "Malformed token",
+				})
+			}
+			return
+		}
+
+		if !token.Valid {
+			sendError(w, errorMessage{
+				StatusCode: http.StatusUnauthorized,
+				Message:    "Invalid or expired token",
+			})
+			return
+		}
+
+		if claims.Role != "PASSENGER" {
+			sendError(w, errorMessage{
+				StatusCode: http.StatusForbidden,
+				Message:    "Access denied: passenger role required",
+			})
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	}
+}
